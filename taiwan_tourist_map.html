@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣旅遊景點互動地圖</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#10b981', // Emerald 500
+                        secondary: '#047857', // Emerald 700
+                        accent: '#f59e0b', // Amber 500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Prevent body scrolling, handle scrolling in components */
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 10;
+        }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 0.5rem;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .leaflet-popup-content {
+            margin: 0;
+            width: 250px !important;
+        }
+
+        .custom-popup-header {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+        }
+
+        .custom-popup-body {
+            padding: 1rem;
+        }
+
+        .custom-popup-title {
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-bottom: 0.25rem;
+            color: #1f2937;
+        }
+
+        .custom-popup-category {
+            display: inline-block;
+            background-color: #d1fae5;
+            color: #065f46;
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .custom-popup-desc {
+            font-size: 0.875rem;
+            color: #4b5563;
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .custom-popup-btn {
+            display: block;
+            width: 100%;
+            text-align: center;
+            background-color: #10b981;
+            color: white;
+            padding: 0.5rem 0;
+            border-radius: 0.375rem;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .custom-popup-btn:hover {
+            background-color: #047857;
+            color: white;
+        }
+
+        /* Marker Icon Styling */
+        .custom-div-icon {
+            background: transparent;
+            border: none;
+        }
+        
+        .marker-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            background: #10b981;
+            position: absolute;
+            transform: rotate(-45deg);
+            left: 50%;
+            top: 50%;
+            margin: -15px 0 0 -15px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .marker-pin::after {
+            content: '';
+            width: 14px;
+            height: 14px;
+            margin: 8px 0 0 8px;
+            background: #fff;
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        .marker-icon-inner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            z-index: 2;
+            font-size: 14px;
+        }
+
+        .category-filter-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .category-filter-btn.active {
+            background-color: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+
+        /* Layout styles */
+        #app-container {
+            display: flex;
+            height: calc(100vh - 64px); /* Subtract header height */
+            position: relative;
+        }
+
+        #sidebar {
+            width: 350px;
+            background: white;
+            z-index: 20;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+
+        #map-container {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #list-container {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .attraction-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .attraction-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            #app-container {
+                flex-direction: column;
+            }
+            #sidebar {
+                width: 100%;
+                height: 40vh; /* Takes up bottom 40% on mobile */
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                position: absolute;
+                bottom: 0;
+                transform: translateY(calc(100% - 60px)); /* Hidden by default, showing only handle */
+            }
+            #sidebar.open {
+                transform: translateY(0);
+            }
+            #map-container {
+                height: 100%;
+            }
+            .mobile-handle {
+                display: flex;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-handle {
+                display: none;
+            }
+        }
+
+        /* Toast Notification */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            margin-left: -125px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 30px;
+            font-size: 17px;
+            transition: visibility 0s, opacity 0.5s linear;
+            opacity: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <header class="h-16 bg-white shadow-sm z-30 flex items-center justify-between px-4 sm:px-6 relative">
+        <div class="flex items-center gap-2">
+            <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white shadow-md">
+                <i class="fa-solid fa-map-location-dot text-xl"></i>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800 tracking-wide">台灣探索圖鑑</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="zoomToTaiwan()" class="p-2 text-gray-600 hover:text-primary transition-colors tooltip-target" title="重置視角">
+                <i class="fa-solid fa-crosshairs text-lg"></i>
+            </button>
+            <button onclick="showInfo()" class="p-2 text-gray-600 hover:text-primary transition-colors tooltip-target" title="關於我們">
+                <i class="fa-solid fa-circle-info text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <div id="app-container">
+        
+        <!-- Map Container -->
+        <div id="map-container">
+            <div id="map"></div>
+            
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-70 z-[400] flex flex-col items-center justify-center backdrop-blur-sm transition-opacity duration-300">
+                <i class="fa-solid fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+                <p class="text-gray-700 font-medium">載入地圖資料中...</p>
+            </div>
+        </div>
+
+        <!-- Sidebar List View -->
+        <div id="sidebar" class="flex flex-col">
+            <!-- Mobile Drag Handle -->
+            <div class="mobile-handle w-full h-[60px] bg-white border-b border-gray-100 flex items-center justify-center cursor-pointer shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-t-2xl z-30" onclick="toggleMobileSidebar()">
+                <div class="flex flex-col items-center gap-1 w-full pointer-events-none">
+                    <div class="w-12 h-1.5 bg-gray-300 rounded-full mb-1"></div>
+                    <span class="text-sm font-medium text-gray-600"><i class="fa-solid fa-list-ul mr-2"></i>瀏覽景點列表 (<span id="mobile-count">0</span>)</span>
+                </div>
+            </div>
+
+            <!-- Filters Area -->
+            <div class="p-4 border-b border-gray-100 bg-white z-20">
+                <h2 class="text-lg font-bold text-gray-800 mb-3 hidden md:block">探索景點</h2>
+                
+                <!-- Search Box -->
+                <div class="relative mb-3">
+                    <input type="text" id="search-input" placeholder="搜尋景點名稱或關鍵字..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-gray-400"></i>
+                </div>
+
+                <!-- Category Filters (Horizontal Scroll) -->
+                <div class="flex overflow-x-auto pb-2 gap-2 snap-x hide-scrollbar" id="category-filters">
+                    <!-- Buttons will be injected here by JS -->
+                </div>
+            </div>
+
+            <!-- List Area -->
+            <div id="list-container" class="p-3 bg-gray-50 pb-20 md:pb-4">
+                <!-- Cards will be injected here by JS -->
+                <div id="empty-state" class="hidden flex-col items-center justify-center h-48 text-gray-500">
+                    <i class="fa-solid fa-face-frown-open text-4xl mb-3 text-gray-300"></i>
+                    <p>找不到符合的景點</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[1000] hidden items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="closeInfo()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
+                    <i class="fa-solid fa-map-location-dot text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">關於台灣探索圖鑑</h2>
+            </div>
+            <p class="text-gray-600 mb-4 leading-relaxed">
+                這是一個互動式的台灣旅遊地圖，幫助您發掘這座美麗島嶼上的自然奇觀、歷史古蹟與文化設施。
+            </p>
+            <ul class="text-gray-600 mb-6 space-y-2 text-sm">
+                <li><i class="fa-solid fa-check text-primary mr-2"></i> 可拖曳地圖瀏覽各地景點</li>
+                <li><i class="fa-solid fa-check text-primary mr-2"></i> 使用分類標籤快速篩選</li>
+                <li><i class="fa-solid fa-check text-primary mr-2"></i> 支援關鍵字搜尋</li>
+                <li><i class="fa-solid fa-check text-primary mr-2"></i> 響應式設計，手機平板皆可使用</li>
+            </ul>
+            <button onclick="closeInfo()" class="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-secondary transition-colors">
+                開始探索
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast"></div>
+
+    <script>
+        // --- Data Definition ---
+        // Mock data for Taiwan attractions to ensure the app works standalone without external API dependencies
+        const attractions = [
+            // North
+            { id: 1, name: '台北101', lat: 25.0339, lng: 121.5644, category: 'landmark', categoryName: '地標建築', desc: '曾為世界第一高樓，擁有超高速電梯與絕佳觀景台，是台北最具代表性的地標。', img: 'https://placehold.co/600x400/2c3e50/ecf0f1?text=Taipei+101', city: '台北市' },
+            { id: 2, name: '國立故宮博物院', lat: 25.1023, lng: 121.5485, category: 'culture', categoryName: '藝文館所', desc: '典藏豐富的中國歷代古物藝術品，包含著名的翠玉白菜與肉形石。', img: 'https://placehold.co/600x400/8e44ad/ecf0f1?text=National+Palace+Museum', city: '台北市' },
+            { id: 3, name: '陽明山國家公園', lat: 25.1664, lng: 121.5647, category: 'nature', categoryName: '自然風景', desc: '以火山地形、溫泉及豐富的花季聞名，是台北市民的後花園。', img: 'https://placehold.co/600x400/27ae60/ecf0f1?text=Yangmingshan', city: '台北市' },
+            { id: 4, name: '九份老街', lat: 25.1086, lng: 121.8443, category: 'culture', categoryName: '歷史人文', desc: '昔日採金礦的繁華小鎮，獨特的山城景觀與茶樓文化吸引眾多遊客。', img: 'https://placehold.co/600x400/d35400/ecf0f1?text=Jiufen', city: '新北市' },
+            { id: 5, name: '野柳地質公園', lat: 25.2052, lng: 121.6903, category: 'nature', categoryName: '自然風景', desc: '以奇特的海岸風化地形聞名，其中「女王頭」是最著名的地標。', img: 'https://placehold.co/600x400/f39c12/ecf0f1?text=Yehliu', city: '新北市' },
+            
+            // Central
+            { id: 6, name: '日月潭', lat: 23.8634, lng: 120.9130, category: 'nature', categoryName: '自然風景', desc: '台灣最大的高山湖泊，風景秀麗，適合騎乘環湖自行車或搭船遊湖。', img: 'https://placehold.co/600x400/2980b9/ecf0f1?text=Sun+Moon+Lake', city: '南投縣' },
+            { id: 7, name: '清境農場', lat: 24.0577, lng: 121.1614, category: 'nature', categoryName: '自然風景', desc: '擁有廣大的高山草原與羊群，享有「亞洲小瑞士」之美名。', img: 'https://placehold.co/600x400/16a085/ecf0f1?text=Cingjing+Farm', city: '南投縣' },
+            { id: 8, name: '高美濕地', lat: 24.3121, lng: 120.5487, category: 'nature', categoryName: '自然風景', desc: '著名的賞夕陽勝地，擁有豐富的濕地生態與壯觀的風力發電機。', img: 'https://placehold.co/600x400/e67e22/ecf0f1?text=Gaomei+Wetlands', city: '台中市' },
+            { id: 9, name: '台中國家歌劇院', lat: 24.1627, lng: 120.6406, category: 'landmark', categoryName: '地標建築', desc: '由日本建築師伊東豊雄設計，獨特的曲面建築被譽為世界最難蓋的建築之一。', img: 'https://placehold.co/600x400/34495e/ecf0f1?text=National+Taichung+Theater', city: '台中市' },
+            
+            // South
+            { id: 10, name: '阿里山國家森林遊樂區', lat: 23.5100, lng: 120.8016, category: 'nature', categoryName: '自然風景', desc: '以日出、雲海、神木、櫻花及森林小火車「阿里山五奇」聞名。', img: 'https://placehold.co/600x400/1e824c/ecf0f1?text=Alishan', city: '嘉義縣' },
+            { id: 11, name: '奇美博物館', lat: 22.9345, lng: 120.2260, category: 'culture', categoryName: '藝文館所', desc: '外觀宛如歐洲宮廷，館藏豐富的西洋藝術、樂器、兵器與自然史標本。', img: 'https://placehold.co/600x400/c0392b/ecf0f1?text=Chimei+Museum', city: '台南市' },
+            { id: 12, name: '安平古堡', lat: 23.0016, lng: 120.1606, category: 'culture', categoryName: '歷史人文', desc: '台灣最古老的城堡，建於17世紀的荷蘭統治時期，見證了台灣的歷史變遷。', img: 'https://placehold.co/600x400/7f8c8d/ecf0f1?text=Anping+Old+Fort', city: '台南市' },
+            { id: 13, name: '駁二藝術特區', lat: 22.6200, lng: 120.2816, category: 'culture', categoryName: '藝文館所', desc: '由舊倉庫改建而成的藝術特區，充滿大型公共藝術與文創商店。', img: 'https://placehold.co/600x400/f1c40f/333333?text=Pier-2+Art+Center', city: '高雄市' },
+            { id: 14, name: '墾丁國家公園', lat: 21.9463, lng: 120.7966, category: 'nature', categoryName: '自然風景', desc: '台灣最南端的國家公園，擁有美麗的珊瑚礁海岸與熱帶氣候風情。', img: 'https://placehold.co/600x400/3498db/ecf0f1?text=Kenting', city: '屏東縣' },
+
+            // East & Islands
+            { id: 15, name: '太魯閣國家公園', lat: 24.1683, lng: 121.6222, category: 'nature', categoryName: '自然風景', desc: '以壯麗的大理岩峽谷景觀聞名於世，是台灣必訪的國際級景點。', img: 'https://placehold.co/600x400/7f8c8d/ecf0f1?text=Taroko+Gorge', city: '花蓮縣' },
+            { id: 16, name: '七星潭', lat: 24.0322, lng: 121.6315, category: 'nature', categoryName: '自然風景', desc: '擁有美麗的月牙形海灣與礫石灘，是觀星、聽海浪聲的絕佳去處。', img: 'https://placehold.co/600x400/2c3e50/ecf0f1?text=Qixingtan', city: '花蓮縣' },
+            { id: 17, name: '伯朗大道', lat: 23.1009, lng: 121.2173, category: 'nature', categoryName: '自然風景', desc: '位於池上鄉的一條沒有電線桿的筆直大路，兩旁為廣闊的稻田，風景如畫。', img: 'https://placehold.co/600x400/27ae60/ecf0f1?text=Mr.+Brown+Avenue', city: '台東縣' },
+            { id: 18, name: '澎湖跨海大橋', lat: 23.6493, lng: 119.5539, category: 'landmark', categoryName: '地標建築', desc: '連接白沙島與西嶼島，是澎湖著名的地標，景色壯闊。', img: 'https://placehold.co/600x400/34495e/ecf0f1?text=Penghu+Great+Bridge', city: '澎湖縣' }
+        ];
+
+        const categories = [
+            { id: 'all', name: '全部', icon: 'fa-layer-group' },
+            { id: 'nature', name: '自然風景', icon: 'fa-tree', color: '#10b981' },
+            { id: 'culture', name: '歷史藝文', icon: 'fa-masks-theater', color: '#8b5cf6' },
+            { id: 'landmark', name: '地標建築', icon: 'fa-building', color: '#f59e0b' }
+        ];
+
+        // --- State ---
+        let map;
+        let markers = [];
+        let currentFilter = 'all';
+        let searchQuery = '';
+        let isMobileSidebarOpen = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            renderFilters();
+            renderList();
+            setupSearch();
+            
+            // Hide loading overlay after map init
+            setTimeout(() => {
+                const overlay = document.getElementById('loading-overlay');
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.style.display = 'none', 300);
+            }, 800);
+        });
+
+        function initMap() {
+            // Taiwan center coordinates
+            const centerLat = 23.7;
+            const centerLng = 120.9;
+            const initialZoom = window.innerWidth < 768 ? 7 : 8;
+
+            map = L.map('map', {
+                center: [centerLat, centerLng],
+                zoom: initialZoom,
+                zoomControl: false // Move zoom control to bottom right
+            });
+
+            // Add map tiles (using CartoDB Voyager for a clean, modern look)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            L.control.zoom({
+                position: 'bottomright'
+            }).addTo(map);
+
+            // Add markers
+            updateMarkers();
+        }
+
+        function updateMarkers() {
+            // Clear existing markers
+            markers.forEach(m => map.removeLayer(m.marker));
+            markers = [];
+
+            // Filter data
+            const filteredData = getFilteredData();
+
+            filteredData.forEach(place => {
+                // Determine color based on category
+                let pinColor = '#10b981'; // default primary
+                const catInfo = categories.find(c => c.id === place.category);
+                if (catInfo && catInfo.color) {
+                    pinColor = catInfo.color;
+                }
+
+                let iconClass = 'fa-location-dot';
+                if(place.category === 'nature') iconClass = 'fa-tree';
+                if(place.category === 'culture') iconClass = 'fa-monument';
+                if(place.category === 'landmark') iconClass = 'fa-building';
+
+                // Create custom icon HTML
+                const iconHtml = `
+                    <div class="marker-pin" style="background: ${pinColor};"></div>
+                    <i class="fa-solid ${iconClass} marker-icon-inner" style="color: ${pinColor}; text-shadow: 0 0 2px white;"></i>
+                `;
+
+                const customIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: iconHtml,
+                    iconSize: [30, 42],
+                    iconAnchor: [15, 42],
+                    popupAnchor: [0, -35]
+                });
+
+                // Create marker
+                const marker = L.marker([place.lat, place.lng], { icon: customIcon })
+                    .addTo(map);
+
+                // Create popup content
+                const popupContent = `
+                    <div>
+                        <img src="${place.img}" class="custom-popup-header" alt="${place.name}">
+                        <div class="custom-popup-body">
+                            <span class="custom-popup-category" style="color: ${pinColor}; background-color: ${pinColor}20;">${place.categoryName}</span>
+                            <h3 class="custom-popup-title">${place.name}</h3>
+                            <p class="text-xs text-gray-500 mb-2"><i class="fa-solid fa-location-dot mr-1"></i>${place.city}</p>
+                            <p class="custom-popup-desc truncate-2-lines">${place.desc}</p>
+                            <button onclick="focusAttraction(${place.id})" class="custom-popup-btn" style="background-color: ${pinColor}">查看詳情</button>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent, {
+                    maxWidth: 250,
+                    minWidth: 250
+                });
+
+                // Add to array for management
+                markers.push({ id: place.id, marker: marker });
+            });
+        }
+
+        function getFilteredData() {
+            return attractions.filter(place => {
+                const matchesFilter = currentFilter === 'all' || place.category === currentFilter;
+                const matchesSearch = place.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                      place.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                      place.desc.toLowerCase().includes(searchQuery.toLowerCase());
+                return matchesFilter && matchesSearch;
+            });
+        }
+
+        function renderList() {
+            const container = document.getElementById('list-container');
+            const emptyState = document.getElementById('empty-state');
+            const mobileCount = document.getElementById('mobile-count');
+            
+            // Clear existing cards (keep empty state)
+            Array.from(container.children).forEach(child => {
+                if (child.id !== 'empty-state') {
+                    child.remove();
+                }
+            });
+
+            const filteredData = getFilteredData();
+            mobileCount.innerText = filteredData.length;
+
+            if (filteredData.length === 0) {
+                emptyState.style.display = 'flex';
+            } else {
+                emptyState.style.display = 'none';
+                
+                filteredData.forEach(place => {
+                    // Get color
+                    let pinColor = '#10b981';
+                    const catInfo = categories.find(c => c.id === place.category);
+                    if (catInfo && catInfo.color) pinColor = catInfo.color;
+
+                    const card = document.createElement('div');
+                    card.className = 'attraction-card bg-white rounded-xl p-3 mb-3 cursor-pointer border border-gray-100 flex gap-3 shadow-sm';
+                    card.onclick = () => focusAttraction(place.id);
+                    
+                    card.innerHTML = `
+                        <img src="${place.img}" alt="${place.name}" class="w-24 h-24 rounded-lg object-cover flex-shrink-0">
+                        <div class="flex flex-col justify-between flex-grow min-w-0">
+                            <div>
+                                <div class="flex justify-between items-start mb-1">
+                                    <h3 class="font-bold text-gray-800 text-sm truncate pr-2">${place.name}</h3>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap font-medium" style="color: ${pinColor}; background-color: ${pinColor}20;">
+                                        ${place.categoryName}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i>${place.city}</p>
+                                <p class="text-xs text-gray-600 line-clamp-2 leading-relaxed">${place.desc}</p>
+                            </div>
+                            <div class="mt-2 flex justify-end">
+                                <span class="text-xs text-primary font-medium flex items-center group-hover:underline">
+                                    在地圖顯示 <i class="fa-solid fa-chevron-right text-[10px] ml-1"></i>
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+        }
+
+        function renderFilters() {
+            const container = document.getElementById('category-filters');
+            container.innerHTML = '';
+
+            categories.forEach(cat => {
+                const btn = document.createElement('button');
+                const isActive = currentFilter === cat.id;
+                
+                btn.className = `category-filter-btn flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium border snap-center
+                    ${isActive ? 'active shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`;
+                
+                // Keep icon color logic even when active text is white
+                const iconColorStyle = (!isActive && cat.color) ? `color: ${cat.color};` : '';
+                
+                btn.innerHTML = `<i class="fa-solid ${cat.icon} mr-1.5" style="${iconColorStyle}"></i>${cat.name}`;
+                
+                btn.onclick = () => {
+                    currentFilter = cat.id;
+                    renderFilters(); // Re-render to update active state
+                    updateMarkers();
+                    renderList();
+                    
+                    // Close mobile sidebar slightly to show map after filtering
+                    if(window.innerWidth < 768 && isMobileSidebarOpen) {
+                        toggleMobileSidebar();
+                    }
+                };
+                
+                container.appendChild(btn);
+            });
+        }
+
+        function setupSearch() {
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                updateMarkers();
+                renderList();
+            });
+        }
+
+        function focusAttraction(id) {
+            const place = attractions.find(p => p.id === id);
+            if (!place) return;
+
+            // Find marker
+            const markerObj = markers.find(m => m.id === id);
+            
+            // Zoom to location
+            map.flyTo([place.lat, place.lng], 14, {
+                duration: 1.5
+            });
+
+            // Open popup after flying finishes
+            setTimeout(() => {
+                if (markerObj) {
+                    markerObj.marker.openPopup();
+                }
+            }, 1500);
+
+            // Handle mobile view
+            if (window.innerWidth < 768) {
+                // Close sidebar on mobile when selecting a place to show the map
+                if(isMobileSidebarOpen) {
+                    toggleMobileSidebar();
+                }
+                showToast(`正在導向 ${place.name}`);
+            }
+        }
+
+        function zoomToTaiwan() {
+            map.flyTo([23.7, 120.9], window.innerWidth < 768 ? 7 : 8, {
+                duration: 1.5
+            });
+            // Close popups
+            map.closePopup();
+        }
+
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const icon = sidebar.querySelector('.fa-list-ul');
+            
+            isMobileSidebarOpen = !isMobileSidebarOpen;
+            
+            if (isMobileSidebarOpen) {
+                sidebar.classList.add('open');
+                icon.classList.remove('fa-list-ul');
+                icon.classList.add('fa-chevron-down');
+                sidebar.querySelector('span.text-sm').innerHTML = `<i class="fa-solid fa-chevron-down mr-2"></i>收合列表`;
+            } else {
+                sidebar.classList.remove('open');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-list-ul');
+                sidebar.querySelector('span.text-sm').innerHTML = `<i class="fa-solid fa-list-ul mr-2"></i>瀏覽景點列表 (<span id="mobile-count">${getFilteredData().length}</span>)`;
+            }
+        }
+
+        function showInfo() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Trigger reflow
+            void modal.offsetWidth;
+            modal.querySelector('div').style.transform = 'scale(1)';
+            modal.querySelector('div').style.opacity = '1';
+        }
+
+        function closeInfo() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.className = "show";
+            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        // Handle resize events to ensure map displays correctly
+        window.addEventListener('resize', () => {
+            if (map) {
+                map.invalidateSize();
+            }
+        });
+        
+    </script>
+</body>
+</html>
