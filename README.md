@@ -96,12 +96,3 @@ Netliffy v1/
 ## 📝 授權
 
 © 2026 AI 作品集. All rights reserved.
-
-🚀 How to Use
-
-To view the web pages locally:
-Clone or download this repository to your local machine.
-Double-click any of the `.html` files (e.g., `taiwan_tourist_map.html` or `index.html.html`) to open them in your default web browser.
-
-👤 Author
-Rita-tibame
