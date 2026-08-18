@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貓咪照護大調查 - 多視角分析儀表板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* 基礎過場動畫 */
+        body {
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .theme-transition {
+            transition: all 0.4s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+        canvas {
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body id="app-body" class="antialiased min-h-screen pb-12 font-[Nunito,'Noto_Sans_TC',sans-serif]">
+
+    <header id="app-header" class="shadow-sm sticky top-0 z-50 rounded-b-3xl mb-8 border-b-4 theme-transition backdrop-blur-md bg-opacity-90">
+        <div class="max-w-6xl mx-auto px-4 py-5 flex flex-col md:flex-row items-center justify-between gap-4">
+            
+            <div class="flex items-center gap-3">
+                <div id="header-icon-box" class="p-3 rounded-full theme-transition flex items-center justify-center w-12 h-12">
+                    <i id="header-icon" class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 id="main-title" class="text-2xl font-bold tracking-tight theme-transition">數據載入中...</h1>
+                    <p id="sub-title" class="text-sm font-semibold theme-transition mt-0.5">請稍候...</p>
+                </div>
+            </div>
+
+            <!-- 視角切換器 (Tab Switcher) -->
+            <div class="flex bg-black/10 p-1 rounded-xl flex-wrap justify-center gap-1 mt-2 md:mt-0">
+                <button onclick="setTheme('internal')" id="btn-internal" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-code"></i> 內部人員
+                </button>
+                <button onclick="setTheme('user')" id="btn-user" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-gamepad"></i> 飼主互動
+                </button>
+                <button onclick="setTheme('educator')" id="btn-educator" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-stethoscope"></i> 教育醫療
+                </button>
+                <button onclick="setTheme('business')" id="btn-business" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-briefcase"></i> 商業公關
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+        
+        <!-- 卡片 1：飼主輪廓 -->
+        <div class="ui-card rounded-3xl p-6 shadow-md card-hover border theme-transition flex flex-col">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="card-icon-1 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+                <h2 id="card1-title" class="text-xl font-bold theme-transition">1. 標題載入中</h2>
+            </div>
+            <p id="card1-desc" class="text-sm mb-6 font-semibold theme-transition opacity-80">描述載入中...</p>
+            
+            <div class="relative flex-grow min-h-[250px]">
+                <canvas id="chart1"></canvas>
+            </div>
+
+            <div class="insight-box-1 mt-6 border-l-4 p-4 rounded-r-xl theme-transition">
+                <p class="text-sm font-bold flex items-start gap-2 theme-transition">
+                    <i class="fa-solid fa-lightbulb mt-0.5"></i>
+                    <span id="card1-insight">洞察載入中...</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- 卡片 2：知識盲點 -->
+        <div class="ui-card rounded-3xl p-6 shadow-md card-hover border theme-transition flex flex-col relative overflow-hidden">
+            <div id="card2-tag" class="absolute top-6 right-6 text-xs font-bold px-3 py-1.5 rounded-full border flex items-center gap-1 shadow-sm theme-transition">
+                <i class="fa-solid fa-triangle-exclamation"></i> <span id="card2-tag-text">Tag</span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-4 w-3/4">
+                <div class="card-icon-2 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition">
+                    <i class="fa-solid fa-book-open-reader"></i>
+                </div>
+                <h2 id="card2-title" class="text-xl font-bold theme-transition">2. 標題載入中</h2>
+            </div>
+            <p id="card2-desc" class="text-sm mb-6 font-semibold theme-transition opacity-80">描述載入中...</p>
+            
+            <div class="relative flex-grow min-h-[250px] flex items-center justify-center">
+                <canvas id="chart2"></canvas>
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span id="donut-center-val" class="text-3xl font-black theme-transition">70%</span>
+                    <span id="donut-center-text" class="text-xs font-bold theme-transition opacity-70">文字</span>
+                </div>
+            </div>
+
+            <div class="insight-box-2 mt-6 border-l-4 p-4 rounded-r-xl theme-transition">
+                <p class="text-sm font-bold flex items-start gap-2 theme-transition">
+                    <i class="fa-solid fa-lightbulb mt-0.5"></i>
+                    <span id="card2-insight">洞察載入中...</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- 卡片 3：就醫決策 -->
+        <div class="ui-card rounded-3xl p-6 shadow-md card-hover border theme-transition flex flex-col">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="card-icon-3 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition">
+                    <i class="fa-solid fa-truck-medical"></i>
+                </div>
+                <h2 id="card3-title" class="text-xl font-bold theme-transition">3. 標題載入中</h2>
+            </div>
+            <p id="card3-desc" class="text-sm mb-6 font-semibold theme-transition opacity-80">描述載入中...</p>
+            
+            <div class="relative flex-grow min-h-[250px]">
+                <canvas id="chart3"></canvas>
+            </div>
+
+            <div class="insight-box-3 mt-6 border-l-4 p-4 rounded-r-xl theme-transition">
+                <p class="text-sm font-bold flex items-start gap-2 theme-transition">
+                    <i class="fa-solid fa-lightbulb mt-0.5"></i>
+                    <span id="card3-insight">洞察載入中...</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- 卡片 4：功能偏好 -->
+        <div class="ui-card rounded-3xl p-6 shadow-md card-hover border theme-transition flex flex-col">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="card-icon-4 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                </div>
+                <h2 id="card4-title" class="text-xl font-bold theme-transition">4. 標題載入中</h2>
+            </div>
+            <p id="card4-desc" class="text-sm mb-6 font-semibold theme-transition opacity-80">描述載入中...</p>
+            
+            <div class="relative flex-grow min-h-[260px]">
+                <canvas id="chart4"></canvas>
+            </div>
+
+            <div class="insight-box-4 mt-6 border-l-4 p-4 rounded-r-xl theme-transition">
+                <p class="text-sm font-bold flex items-start gap-2 theme-transition">
+                    <i class="fa-solid fa-lightbulb mt-0.5"></i>
+                    <span id="card4-insight">洞察載入中...</span>
+                </p>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // 定義四種角色的內容與樣式狀態
+        const THEMES = {
+            internal: {
+                name: '內部人員 (深色科技風)',
+                colors: {
+                    bodyBg: 'bg-slate-900', bodyText: 'text-slate-200',
+                    headerBg: 'bg-slate-900', headerBorder: 'border-blue-500', headerIconBg: 'bg-blue-900/50', headerIconText: 'text-blue-400',
+                    cardBg: 'bg-slate-800', cardBorder: 'border-slate-700',
+                    btnActiveBg: 'bg-blue-600', btnActiveText: 'text-white', btnInactive: 'text-slate-400 hover:bg-slate-800',
+                    chartText: '#94a3b8', chartGrid: '#334155',
+                    c1IconBg: 'bg-blue-900/50', c1IconText: 'text-blue-400', c1BoxBg: 'bg-blue-900/30', c1BoxBorder: 'border-blue-500', c1BoxText: 'text-blue-300',
+                    c2IconBg: 'bg-red-900/50', c2IconText: 'text-red-400', c2BoxBg: 'bg-red-900/30', c2BoxBorder: 'border-red-500', c2BoxText: 'text-red-300', c2TagBg: 'bg-red-900/80', c2TagBorder: 'border-red-500', c2TagText: 'text-red-300',
+                    c3IconBg: 'bg-amber-900/50', c3IconText: 'text-amber-400', c3BoxBg: 'bg-amber-900/30', c3BoxBorder: 'border-amber-500', c3BoxText: 'text-amber-300',
+                    c4IconBg: 'bg-indigo-900/50', c4IconText: 'text-indigo-400', c4BoxBg: 'bg-indigo-900/30', c4BoxBorder: 'border-indigo-500', c4BoxText: 'text-indigo-300'
+                },
+                content: {
+                    mainTitle: 'App 產品開發數據中樞', subTitle: '基於市調數據的 UI/UX 與功能決策指標', headerIcon: 'fa-server',
+                    c1Title: '1. 目標受眾與獲客輪廓', c1Desc: '核心轉換群體之經驗分佈分析。', c1Insight: 'Insight: 1-3年經驗者佔 45%。行銷素材與 Onboarding 流程應主打「進階照護痛點」以提高留存率。',
+                    c2Title: '2. 知識斷層與功能缺口', c2Desc: 'AAFCO 標準認知誤區量化分析。', c2Insight: 'Insight: 70% 具備嚴重認知誤區。強烈建議在 App 內建置「營養標籤解析」互動式教學模組。', c2Tag: 'P0 級產品開發重點', c2Center: '知識盲點',
+                    c3Title: '3. 交叉分析：年資 vs 決策延誤', c3Desc: '新手與老手在尋求醫療介入的時間差比對。', c3Insight: 'Insight: 新手容易緊張而提早就醫；老手反而因自信而延誤(過度觀察)。需針對老手推播進階警示。',
+                    c4Title: '4. 交叉分析：年資 vs 功能偏好', c4Desc: '不同年資飼主，對功能入口之 A/B 偏好測試。', c4Insight: 'Insight: 新手極度依賴清單(Checklist)，老手偏好對話(Chat)。Onboarding 應按年資進行功能分流。'
+                },
+                charts: {
+                    pieColors: ['#475569', '#3b82f6', '#10b981'],
+                    donutColors: ['#ef4444', '#10b981', '#475569'],
+                    barColors: ['#3b82f6', '#10b981', '#ef4444', '#991b1b'],
+                    radarColors: ['#6366f1', '#f59e0b']
+                }
+            },
+            user: {
+                name: '飼主觀看 (遊戲化互動)',
+                colors: {
+                    bodyBg: 'bg-[#fdfbf9]', bodyText: 'text-gray-800',
+                    headerBg: 'bg-white', headerBorder: 'border-[#feb2b2]', headerIconBg: 'bg-[#ffedd5]', headerIconText: 'text-[#f97316]',
+                    cardBg: 'bg-white', cardBorder: 'border-gray-100',
+                    btnActiveBg: 'bg-[#f97316]', btnActiveText: 'text-white', btnInactive: 'text-gray-500 hover:bg-orange-50',
+                    chartText: '#64748b', chartGrid: '#f1f5f9',
+                    c1IconBg: 'bg-orange-100', c1IconText: 'text-orange-600', c1BoxBg: 'bg-orange-50', c1BoxBorder: 'border-orange-400', c1BoxText: 'text-orange-800',
+                    c2IconBg: 'bg-red-100', c2IconText: 'text-red-500', c2BoxBg: 'bg-red-50', c2BoxBorder: 'border-red-400', c2BoxText: 'text-red-800', c2TagBg: 'bg-red-100', c2TagBorder: 'border-red-200', c2TagText: 'text-red-600',
+                    c3IconBg: 'bg-yellow-100', c3IconText: 'text-yellow-600', c3BoxBg: 'bg-yellow-50', c3BoxBorder: 'border-yellow-400', c3BoxText: 'text-yellow-800',
+                    c4IconBg: 'bg-pink-100', c4IconText: 'text-pink-500', c4BoxBg: 'bg-pink-50', c4BoxBorder: 'border-pink-400', c4BoxText: 'text-pink-800'
+                },
+                content: {
+                    mainTitle: '哈囉貓奴！來解鎖你的專屬成就不？', subTitle: '看看你跟其他飼主的默契度 🐾 邊玩邊學！', headerIcon: 'fa-gamepad',
+                    c1Title: '1. 測測你的貓奴等級！', c1Desc: '看看你在貓奴村裡是萌新還是長老？', c1Insight: '【同溫層比較】你的貓5歲了？有60%的5歲貓奴最關心泌尿道，要不要也測一下？',
+                    c2Title: '2. 破除迷思大挑戰！', c2Desc: '關於飼料包裝的秘密，你闖關成功了嗎？', c2Insight: '【破除迷思】答錯別灰心！70%的飼主一開始都答錯了。正確解答就在 App 裡喔！', c2Tag: '🎮 挑戰任務', c2Center: '解鎖解答',
+                    c3Title: '3. 主子吐了！你的反應時間是？', c3Desc: '遇到嘔吐不吃飯，看看大家的緊急應變！', c3Insight: '【小任務】貓咪很會忍痛，超過24小時沒吃飯就有危險！快啟用 App 的健康計時器吧！',
+                    c4Title: '4. 遇到困難，你喜歡哪種神隊友？', c4Desc: '喜歡「點選清單」還是「呼叫 AI 醫生」？', c4Insight: '【功能解鎖】大家各有喜好！在 App 裡只要完成日常簽到，兩種超棒功能都能免費體驗！'
+                },
+                charts: {
+                    pieColors: ['#fca5a5', '#fdba74', '#fde047'],
+                    donutColors: ['#fb7185', '#34d399', '#cbd5e1'],
+                    barColors: ['#fb923c', '#34d399', '#f87171', '#991b1b'],
+                    radarColors: ['#f472b6', '#fbbf24']
+                }
+            },
+            educator: {
+                name: '教育醫療 (臨床藍白風)',
+                colors: {
+                    bodyBg: 'bg-[#f0f4f8]', bodyText: 'text-slate-800',
+                    headerBg: 'bg-white', headerBorder: 'border-teal-500', headerIconBg: 'bg-teal-50', headerIconText: 'text-teal-600',
+                    cardBg: 'bg-white', cardBorder: 'border-slate-200',
+                    btnActiveBg: 'bg-teal-600', btnActiveText: 'text-white', btnInactive: 'text-slate-500 hover:bg-teal-50',
+                    chartText: '#475569', chartGrid: '#e2e8f0',
+                    c1IconBg: 'bg-blue-50', c1IconText: 'text-blue-600', c1BoxBg: 'bg-blue-50', c1BoxBorder: 'border-blue-500', c1BoxText: 'text-blue-900',
+                    c2IconBg: 'bg-rose-50', c2IconText: 'text-rose-600', c2BoxBg: 'bg-rose-50', c2BoxBorder: 'border-rose-500', c2BoxText: 'text-rose-900', c2TagBg: 'bg-rose-100', c2TagBorder: 'border-rose-300', c2TagText: 'text-rose-700',
+                    c3IconBg: 'bg-sky-50', c3IconText: 'text-sky-600', c3BoxBg: 'bg-sky-50', c3BoxBorder: 'border-sky-500', c3BoxText: 'text-sky-900',
+                    c4IconBg: 'bg-teal-50', c4IconText: 'text-teal-600', c4BoxBg: 'bg-teal-50', c4BoxBorder: 'border-teal-500', c4BoxText: 'text-teal-900'
+                },
+                content: {
+                    mainTitle: '貓科臨床衛教與醫病溝通分析', subTitle: '基於飼主認知落差與就醫行為之統計報告', headerIcon: 'fa-stethoscope',
+                    c1Title: '1. 衛教目標受眾結構', c1Desc: '樣本群體之照護經驗常態分佈。', c1Insight: '臨床洞察：多數衛教對象為 1-3 年經驗者。具備基礎認知但易受網路未經驗證之資訊誤導，需提供文獻實證。',
+                    c2Title: '2. 商業食品認知風險', c2Desc: '飼主對國際營養標準(AAFCO)之誤解比例。', c2Insight: '臨床洞察：高達七成過度依賴單一底線標準。門診衛教時應主動介入，強化「食材來源與加工方式」之重要性。', c2Tag: '⚠️ 核心衛教指標', c2Center: '觀念落差',
+                    c3Title: '3. 延誤就醫 (Delay in Care) 分析', c3Desc: '消化道症狀發生至尋求醫療介入之時間差。', c3Insight: '臨床洞察：近半數(48%)飼主錯失黃金治療期(24h)。需加強宣導貓科動物隱藏病痛之天性與急症預兆。',
+                    c4Title: '4. 醫病數位溝通偏好', c4Desc: '飼主尋求醫療判斷資訊之介面偏好。', c4Insight: '臨床洞察：資深飼主偏好對話式介面。未來可於看診前導入初步問診 AI，協助醫師系統化收集病史。'
+                },
+                charts: {
+                    pieColors: ['#94a3b8', '#0ea5e9', '#0f766e'],
+                    donutColors: ['#e11d48', '#0d9488', '#cbd5e1'],
+                    barColors: ['#0ea5e9', '#0f766e', '#e11d48', '#9f1239'],
+                    radarColors: ['#0284c7', '#059669']
+                }
+            },
+            business: {
+                name: '商業公關 (藏青鑲金風)',
+                colors: {
+                    bodyBg: 'bg-[#0f172a]', bodyText: 'text-gray-200',
+                    headerBg: 'bg-[#0f172a]', headerBorder: 'border-yellow-500', headerIconBg: 'bg-yellow-500/20', headerIconText: 'text-yellow-400',
+                    cardBg: 'bg-[#1e293b]', cardBorder: 'border-slate-700',
+                    btnActiveBg: 'bg-yellow-500', btnActiveText: 'text-slate-900', btnInactive: 'text-slate-400 hover:bg-slate-800',
+                    chartText: '#cbd5e1', chartGrid: '#334155',
+                    c1IconBg: 'bg-yellow-500/20', c1IconText: 'text-yellow-400', c1BoxBg: 'bg-yellow-500/10', c1BoxBorder: 'border-yellow-500', c1BoxText: 'text-yellow-200',
+                    c2IconBg: 'bg-blue-500/20', c2IconText: 'text-blue-400', c2BoxBg: 'bg-blue-500/10', c2BoxBorder: 'border-blue-500', c2BoxText: 'text-blue-200', c2TagBg: 'bg-yellow-500/80', c2TagBorder: 'border-yellow-400', c2TagText: 'text-yellow-900',
+                    c3IconBg: 'bg-emerald-500/20', c3IconText: 'text-emerald-400', c3BoxBg: 'bg-emerald-500/10', c3BoxBorder: 'border-emerald-500', c3BoxText: 'text-emerald-200',
+                    c4IconBg: 'bg-purple-500/20', c4IconText: 'text-purple-400', c4BoxBg: 'bg-purple-500/10', c4BoxBorder: 'border-purple-500', c4BoxText: 'text-purple-200'
+                },
+                content: {
+                    mainTitle: '商業合作、募資提案與 PR 行銷', subTitle: '數據變現、B2B 導流與社群話題切入點', headerIcon: 'fa-briefcase',
+                    c1Title: '1. 用戶 LTV 與核心受眾', c1Desc: '募資亮點：找出最容易轉換的高淨值客群。', c1Insight: '商業價值：45%為具備消費力的1-3年飼主，是推動訂閱制與高單價電商導購的黃金客群。',
+                    c2Title: '2. 品牌導購潛力 & PR 行銷', c2Desc: '社群話題：利用知識落差建立社群共鳴。', c2Insight: 'PR 操作：「7成貓奴誤解飲食」可作公關話題。B2B：高轉換潛力，可向食品品牌提案贊助模組。', c2Tag: '💰 B2B 合作', c2Center: '導購紅利',
+                    c3Title: '3. 獸醫院 B2B 導流價值', c3Desc: '提案痛點：48% 飼主會猶豫不決而延誤就醫。', c3Insight: 'B2B 提案：App 警示功能可將猶豫病患提早 12 小時導流至實體診所，增加院所來客並減少糾紛。',
+                    c4Title: '4. 產品變現漏斗 (Monetization)', c4Desc: '商業模式：由淺入深打造付費護城河。', c4Insight: '變現策略：以免費「檢核清單」引流拉新，並將進階的「AI 對話問答」包裝為高毛利付費訂閱服務。'
+                },
+                charts: {
+                    pieColors: ['#64748b', '#facc15', '#10b981'],
+                    donutColors: ['#3b82f6', '#facc15', '#64748b'],
+                    barColors: ['#3b82f6', '#facc15', '#ef4444', '#991b1b'],
+                    radarColors: ['#a855f7', '#facc15']
+                }
+            }
+        };
+
+        let chartInstances = {};
+
+        function renderCharts(themeKey) {
+            const data = THEMES[themeKey].charts;
+            const colors = THEMES[themeKey].colors;
+            
+            // 全局字體顏色設定
+            Chart.defaults.color = colors.chartText;
+            Chart.defaults.font.family = "'Nunito', 'Noto Sans TC', sans-serif";
+            const gridConfig = { color: colors.chartGrid, drawBorder: false, borderDash: [5, 5] };
+
+            // 銷毀舊圖表
+            Object.keys(chartInstances).forEach(key => {
+                if (chartInstances[key]) chartInstances[key].destroy();
+            });
+
+            // 圖表 1: 圓餅圖
+            chartInstances['c1'] = new Chart(document.getElementById('chart1').getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: ['完全新手 (<1年)', '半熟飼主 (1-3年)', '資深貓奴 (>3年)'],
+                    datasets: [{
+                        data: [20, 45, 35],
+                        backgroundColor: data.pieColors, borderWidth: 0, hoverOffset: 8
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            // 圖表 2: 甜甜圈圖
+            chartInstances['c2'] = new Chart(document.getElementById('chart2').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['認為符合=安心', '知道僅是底線', '不清楚標準'],
+                    datasets: [{
+                        data: [70, 20, 10],
+                        backgroundColor: data.donutColors, borderWidth: 0, cutout: '70%'
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            // 圖表 3: 交叉分析長條圖 (年資 vs. 就醫決策)
+            chartInstances['c3'] = new Chart(document.getElementById('chart3').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['半天內就醫', '觀察24小時', '觀察2-3天', '嚴重才去'],
+                    datasets: [
+                        { label: '新手 (<1年)', data: [60, 30, 10, 0], backgroundColor: data.barColors[0], borderRadius: 4 },
+                        { label: '半熟 (1-3年)', data: [20, 50, 25, 5], backgroundColor: data.barColors[1], borderRadius: 4 },
+                        { label: '資深 (>3年)', data: [5, 20, 60, 15], backgroundColor: data.barColors[2], borderRadius: 4 }
+                    ]
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: {size: 11} } } },
+                    scales: { 
+                        y: { beginAtZero: true, max: 70, grid: gridConfig, title: {display: true, text: '佔該年資比例(%)', font: {size: 10}} }, 
+                        x: { grid: {display: false} } 
+                    }
+                }
+            });
+
+            // 圖表 4: 雙柱狀圖 (代替雷達圖更易讀)
+            chartInstances['c4'] = new Chart(document.getElementById('chart4').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['新手', '半熟飼主', '資深貓奴'],
+                    datasets: [
+                        { label: '偏好 檢核清單', data: [85, 45, 30], backgroundColor: data.radarColors[0], borderRadius: 4 },
+                        { label: '偏好 對話問答', data: [15, 55, 70], backgroundColor: data.radarColors[1], borderRadius: 4 }
+                    ]
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100, grid: gridConfig }, x: { grid: {display: false} } }
+                }
+            });
+        }
+
+        function setTheme(themeKey) {
+            const theme = THEMES[themeKey];
+            const c = theme.colors;
+            const t = theme.content;
+
+            // 1. 更新按鈕狀態
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${c.btnInactive}`;
+            });
+            const activeBtn = document.getElementById(`btn-${themeKey}`);
+            activeBtn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md transform scale-105 ${c.btnActiveBg} ${c.btnActiveText}`;
+
+            // 2. 更新背景與全域文字顏色
+            const body = document.getElementById('app-body');
+            body.className = `antialiased min-h-screen pb-12 font-[Nunito,'Noto_Sans_TC',sans-serif] ${c.bodyBg} ${c.bodyText}`;
+
+            // 3. 更新頭部區域
+            document.getElementById('app-header').className = `shadow-sm sticky top-0 z-50 rounded-b-3xl mb-8 border-b-4 theme-transition backdrop-blur-md bg-opacity-90 ${c.headerBg} ${c.headerBorder}`;
+            document.getElementById('header-icon-box').className = `p-3 rounded-full theme-transition flex items-center justify-center w-12 h-12 ${c.headerIconBg}`;
+            document.getElementById('header-icon').className = `fa-solid ${t.headerIcon} text-xl theme-transition ${c.headerIconText}`;
+            document.getElementById('main-title').textContent = t.mainTitle;
+            document.getElementById('sub-title').textContent = t.subTitle;
+            document.getElementById('sub-title').className = `text-sm font-semibold theme-transition mt-0.5 ${themeKey==='internal' ? 'text-slate-400' : 'text-gray-500'}`;
+
+            // 4. 更新卡片背景與邊框
+            document.querySelectorAll('.ui-card').forEach(card => {
+                card.className = `ui-card rounded-3xl p-6 shadow-md card-hover border theme-transition flex flex-col ${c.cardBg} ${c.cardBorder}`;
+            });
+
+            // 5. 更新卡片 1 內容
+            document.querySelector('.card-icon-1').className = `card-icon-1 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition ${c.c1IconBg} ${c.c1IconText}`;
+            document.getElementById('card1-title').textContent = t.c1Title;
+            document.getElementById('card1-desc').textContent = t.c1Desc;
+            document.getElementById('card1-insight').textContent = t.c1Insight;
+            document.querySelector('.insight-box-1').className = `insight-box-1 mt-6 border-l-4 p-4 rounded-r-xl theme-transition ${c.c1BoxBg} ${c.c1BoxBorder} ${c.c1BoxText}`;
+
+            // 6. 更新卡片 2 內容
+            document.querySelector('.card-icon-2').className = `card-icon-2 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition ${c.c2IconBg} ${c.c2IconText}`;
+            document.getElementById('card2-title').textContent = t.c2Title;
+            document.getElementById('card2-desc').textContent = t.c2Desc;
+            document.getElementById('card2-insight').textContent = t.c2Insight;
+            document.querySelector('.insight-box-2').className = `insight-box-2 mt-6 border-l-4 p-4 rounded-r-xl theme-transition ${c.c2BoxBg} ${c.c2BoxBorder} ${c.c2BoxText}`;
+            
+            document.getElementById('card2-tag').className = `absolute top-6 right-6 text-xs font-bold px-3 py-1.5 rounded-full border flex items-center gap-1 shadow-sm theme-transition ${c.c2TagBg} ${c.c2TagBorder} ${c.c2TagText}`;
+            document.getElementById('card2-tag-text').textContent = t.c2Tag;
+            
+            document.getElementById('donut-center-val').className = `text-3xl font-black theme-transition ${c.c2IconText}`;
+            document.getElementById('donut-center-text').textContent = t.c2Center;
+
+            // 7. 更新卡片 3 內容
+            document.querySelector('.card-icon-3').className = `card-icon-3 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition ${c.c3IconBg} ${c.c3IconText}`;
+            document.getElementById('card3-title').textContent = t.c3Title;
+            document.getElementById('card3-desc').textContent = t.c3Desc;
+            document.getElementById('card3-insight').textContent = t.c3Insight;
+            document.querySelector('.insight-box-3').className = `insight-box-3 mt-6 border-l-4 p-4 rounded-r-xl theme-transition ${c.c3BoxBg} ${c.c3BoxBorder} ${c.c3BoxText}`;
+
+            // 8. 更新卡片 4 內容
+            document.querySelector('.card-icon-4').className = `card-icon-4 w-10 h-10 rounded-xl flex items-center justify-center text-lg theme-transition ${c.c4IconBg} ${c.c4IconText}`;
+            document.getElementById('card4-title').textContent = t.c4Title;
+            document.getElementById('card4-desc').textContent = t.c4Desc;
+            document.getElementById('card4-insight').textContent = t.c4Insight;
+            document.querySelector('.insight-box-4').className = `insight-box-4 mt-6 border-l-4 p-4 rounded-r-xl theme-transition ${c.c4BoxBg} ${c.c4BoxBorder} ${c.c4BoxText}`;
+
+            // 9. 重新渲染圖表顏色
+            renderCharts(themeKey);
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // 預設載入「內部人員」視角
+            setTheme('internal');
+        });
+    </script>
+</body>
+</html>

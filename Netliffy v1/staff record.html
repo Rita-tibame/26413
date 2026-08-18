@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>員工出勤與工時健康度分析儀表板</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx) for reading Excel files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f3f4f6;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border-radius: 1rem;
+        }
+        .stat-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        #loadingOverlay {
+            display: none;
+            backdrop-filter: blur(5px);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-72 bg-slate-800 text-white flex flex-col shadow-2xl z-20">
+        <div class="p-6">
+            <h1 class="text-xl font-bold flex items-center gap-3 tracking-wide">
+                <i class="fa-solid fa-chart-pie text-blue-400"></i>
+                HR 分析儀表板
+            </h1>
+            <p class="text-xs text-slate-400 mt-2">100% 離線分析・保障隱私</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- File Upload Section -->
+            <div class="space-y-3">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">📂 資料上傳</h2>
+                <div class="w-full">
+                    <label for="excelFile" class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-600 border-dashed rounded-xl cursor-pointer bg-slate-700/50 hover:bg-slate-700 transition-colors">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+                            <p class="mb-1 text-sm text-slate-300 font-medium">點擊或拖曳上傳</p>
+                            <p class="text-xs text-slate-500">僅支援 Excel (.xlsx, .xls)</p>
+                        </div>
+                        <input id="excelFile" type="file" class="hidden" accept=".xlsx, .xls" />
+                    </label>
+                    <p id="fileNameDisplay" class="text-xs text-green-400 mt-2 truncate hidden"></p>
+                </div>
+            </div>
+
+            <hr class="border-slate-700">
+
+            <!-- Settings Section -->
+            <div class="space-y-4">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">⚙️ 分析參數設定</h2>
+                
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-400">月薪基準 (元)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">$</span>
+                        <input type="number" id="baseSalary" value="36000" class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-8 p-2.5">
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-400">約定上班時間</label>
+                    <input type="time" id="targetStartTime" value="09:30" class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-400">單日過勞警戒 (小時)</label>
+                    <input type="range" id="overworkThreshold" min="8" max="16" value="12" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                    <div class="text-right text-xs text-blue-400 font-bold" id="thresholdValue">12 hr</div>
+                </div>
+            </div>
+            
+            <button id="analyzeBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm px-5 py-3 text-center transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                開始分析
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        
+        <!-- Header -->
+        <header class="bg-white shadow-sm z-10 py-4 px-8 flex justify-between items-center">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">員工出勤與工時健康度分析</h2>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded border border-green-200">去識別化模式開啟</span>
+                    <span class="text-sm text-gray-500" id="currentEmpId">等待資料載入...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Dashboard Area -->
+        <div id="dashboardArea" class="flex-1 overflow-y-auto p-8 hidden">
+            
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                <!-- KPI 1 -->
+                <div class="glass-panel p-6 stat-card border-t-4 border-blue-500">
+                    <h3 class="text-gray-500 text-sm font-medium mb-1">在職 / 出勤天數</h3>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold text-gray-800" id="kpi-workdays">0 / 0</span>
+                    </div>
+                </div>
+                <!-- KPI 2 -->
+                <div class="glass-panel p-6 stat-card border-t-4 border-red-500">
+                    <h3 class="text-gray-500 text-sm font-medium mb-1">總遲到次數</h3>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold text-gray-800" id="kpi-late-count">0 次</span>
+                    </div>
+                    <p class="text-sm text-red-500 mt-2 font-medium" id="kpi-late-mins">共計 0 分鐘</p>
+                </div>
+                <!-- KPI 3 -->
+                <div class="glass-panel p-6 stat-card border-t-4 border-yellow-500">
+                    <h3 class="text-gray-500 text-sm font-medium mb-1">總請假時數</h3>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold text-gray-800" id="kpi-leave-hours">0 hr</span>
+                    </div>
+                </div>
+                <!-- KPI 4 -->
+                <div class="glass-panel p-6 stat-card border-t-4 border-purple-500">
+                    <h3 class="text-gray-500 text-sm font-medium mb-1">總加班時數</h3>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold text-gray-800" id="kpi-ot-hours">0 hr</span>
+                    </div>
+                </div>
+                <!-- KPI 5 -->
+                <div class="glass-panel p-6 stat-card border-t-4 border-emerald-500 relative overflow-hidden">
+                    <div class="absolute -right-4 -bottom-4 opacity-10 text-emerald-500">
+                        <i class="fa-solid fa-coins fa-5x"></i>
+                    </div>
+                    <h3 class="text-gray-500 text-sm font-medium mb-1 relative z-10">結算加班費 (試算)</h3>
+                    <div class="flex items-baseline gap-2 relative z-10">
+                        <span class="text-3xl font-bold text-gray-800" id="kpi-ot-pay">$0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                
+                <!-- Chart 1: Trend -->
+                <div class="glass-panel p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">📉 每日打卡時間落差</h3>
+                    </div>
+                    <div class="relative h-72">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Heatmap (Simulated with Bar for simplicity in Chart.js without complex plugins) -->
+                <div class="glass-panel p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">🔥 每日工時長度分佈</h3>
+                        <span class="text-xs text-red-500 bg-red-100 px-2 py-1 rounded font-medium" id="chart2-alert-label">警戒線: 12hr</span>
+                    </div>
+                    <div class="relative h-72">
+                        <canvas id="heatmapChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Late by Day -->
+                <div class="glass-panel p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">🍩 遲到頻率 (星期分佈)</h3>
+                    <div class="relative h-64 flex justify-center">
+                        <canvas id="lateDayChart"></canvas>
+                    </div>
+                </div>
+
+                 <!-- Chart 4: Leave by Month -->
+                <div class="glass-panel p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">📅 請假時數 (月份分佈)</h3>
+                    <div class="relative h-64 flex justify-center">
+                        <canvas id="leaveMonthChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Insights Report -->
+            <div class="glass-panel p-0 overflow-hidden mb-8">
+                <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-4">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-robot"></i> AI 綜合診斷與管理建議
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-sm font-bold text-indigo-800 uppercase tracking-wider mb-4 border-b pb-2">📊 數據客觀診斷</h4>
+                            <ul id="diagnosticList" class="space-y-4">
+                                <!-- Dynamic Content -->
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-4 border-b pb-2">🛠️ 管理層行動建議</h4>
+                            <div id="recommendationList" class="space-y-4">
+                                <!-- Dynamic Content -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Initial Placeholder -->
+        <div id="initialPlaceholder" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+            <i class="fa-solid fa-file-excel text-6xl mb-4 text-gray-300"></i>
+            <h3 class="text-xl font-medium text-gray-600 mb-2">等待資料載入</h3>
+            <p class="text-sm">請從左側邊欄上傳「出勤紀錄.xlsx」並點擊開始分析</p>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mb-4"></div>
+            <h3 class="text-xl font-bold text-gray-800">資料解析與去識別化處理中...</h3>
+            <p class="text-gray-500 mt-2 text-sm">此過程完全在您的瀏覽器端執行，確保資料隱私</p>
+        </div>
+
+    </main>
+
+    <script>
+        // Global Variables
+        let processedData = [];
+        let chartInstances = {};
+
+        // DOM Elements
+        const excelFileInput = document.getElementById('excelFile');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const dashboardArea = document.getElementById('dashboardArea');
+        const initialPlaceholder = document.getElementById('initialPlaceholder');
+        const overworkThresholdInput = document.getElementById('overworkThreshold');
+        const thresholdValueDisplay = document.getElementById('thresholdValue');
+
+        // UI Interactions
+        overworkThresholdInput.addEventListener('input', (e) => {
+            thresholdValueDisplay.textContent = `${e.target.value} hr`;
+            document.getElementById('chart2-alert-label').textContent = `警戒線: ${e.target.value}hr`;
+        });
+
+        excelFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const fileName = e.target.files[0].name;
+                fileNameDisplay.textContent = `已選擇: ${fileName}`;
+                fileNameDisplay.classList.remove('hidden');
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        analyzeBtn.addEventListener('click', () => {
+            if (excelFileInput.files.length === 0) {
+                alert("請先選擇 Excel 檔案！");
+                return;
+            }
+            processExcelData(excelFileInput.files[0]);
+        });
+
+        // Data Processing Engine
+        function processExcelData(file) {
+            showLoading();
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                    
+                    // Assuming the data is in the first sheet or '彙整總表'
+                    const sheetName = workbook.SheetNames.includes('彙整總表') ? '彙整總表' : workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    // Convert sheet to JSON array of arrays to handle complex headers
+                    const rawJson = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: null});
+                    
+                    // Config from UI
+                    const baseSalary = parseFloat(document.getElementById('baseSalary').value) || 36000;
+                    const targetTimeStr = document.getElementById('targetStartTime').value || '09:30';
+                    const targetTimeParts = targetTimeStr.split(':');
+                    const targetHour = parseInt(targetTimeParts[0]);
+                    const targetMinute = parseInt(targetTimeParts[1]);
+                    const overworkThreshold = parseFloat(document.getElementById('overworkThreshold').value);
+
+                    // --- Data Anonymization ---
+                    const employeeId = `EMP_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                    document.getElementById('currentEmpId').textContent = employeeId;
+
+                    // Parse Data
+                    const parsedData = [];
+                    // Start parsing from row 5 (index 4) assuming top rows are messy headers
+                    for (let i = 4; i < rawJson.length; i++) {
+                        const row = rawJson[i];
+                        // Skip empty rows (checking first column usually date)
+                        if (!row || row.length < 2 || row[1] == null) continue;
+
+                        // Utility to parse time from varying Excel formats
+                        const parseExcelTime = (val) => {
+                            if (val instanceof Date) {
+                                return { h: val.getHours(), m: val.getMinutes() };
+                            }
+                            if (typeof val === 'number') { // Excel decimal time
+                                const totalSeconds = Math.round(val * 24 * 3600);
+                                return { h: Math.floor(totalSeconds / 3600), m: Math.floor((totalSeconds % 3600) / 60) };
+                            }
+                            if (typeof val === 'string' && val.includes(':')) {
+                                const parts = val.trim().split(':');
+                                return { h: parseInt(parts[0]), m: parseInt(parts[1]) };
+                            }
+                            return null;
+                        };
+
+                        const dateVal = row[1]; // 出勤日期
+                        if (!(dateVal instanceof Date)) continue; // Only process valid dates
+
+                        const startTimeRaw = row[4]; // 實際上班時間
+                        const endTimeRaw = row[5]; // 實際下班時間
+                        
+                        const startTime = parseExcelTime(startTimeRaw);
+                        const endTime = parseExcelTime(endTimeRaw);
+
+                        // Calculate Actual Work Hours
+                        let actualWorkHours = 0;
+                        if (startTime && endTime) {
+                            let startMin = startTime.h * 60 + startTime.m;
+                            let endMin = endTime.h * 60 + endTime.m;
+                            // Handle crossing midnight
+                            if (endMin < startMin) endMin += 24 * 60;
+                            
+                            let diffMin = endMin - startMin;
+                            // Deduct 1 hour for lunch if worked more than 4 hours
+                            if (diffMin > 4 * 60) diffMin -= 60; 
+                            
+                            actualWorkHours = diffMin / 60;
+                        }
+
+                        // Calculate Late Minutes
+                        let lateMinutes = 0;
+                        if (startTime) {
+                            const startMin = startTime.h * 60 + startTime.m;
+                            const targetTotalMin = targetHour * 60 + targetMinute;
+                            if (startMin > targetTotalMin) {
+                                lateMinutes = startMin - targetTotalMin;
+                            }
+                        }
+
+                        // Parse Leave and Overtime
+                        const leaveHoursRaw = row[10];
+                        const leaveHours = parseFloat(leaveHoursRaw) || 0;
+
+                        const otHoursRaw = row[13];
+                        let otHours = 0;
+                        if (typeof otHoursRaw === 'number') otHours = otHoursRaw;
+                        else if (typeof otHoursRaw === 'string' && otHoursRaw.includes(':')) {
+                            const p = otHoursRaw.split(':');
+                            otHours = parseInt(p[0]) + parseInt(p[1])/60;
+                        } else if (otHoursRaw instanceof Date) {
+                             otHours = otHoursRaw.getHours() + otHoursRaw.getMinutes()/60;
+                        } else {
+                            otHours = parseFloat(otHoursRaw) || 0;
+                        }
+
+                        const otPayRaw = row[16];
+                        const otPay = parseFloat(otPayRaw) || 0;
+
+                        // Formatting date strings manually
+                        const year = dateVal.getFullYear();
+                        const month = String(dateVal.getMonth() + 1).padStart(2, '0');
+                        const day = String(dateVal.getDate()).padStart(2, '0');
+                        
+                        parsedData.push({
+                            date: dateVal,
+                            dateStr: `${year}-${month}-${day}`,
+                            dayOfWeek: dateVal.getDay(), // 0(Sun) - 6(Sat)
+                            monthStr: `${year}-${month}`,
+                            startTime: startTime,
+                            startTimeStr: startTime ? `${String(startTime.h).padStart(2,'0')}:${String(startTime.m).padStart(2,'0')}` : null,
+                            startTotalMin: startTime ? (startTime.h * 60 + startTime.m) : null,
+                            endTime: endTime,
+                            actualWorkHours: Math.max(0, actualWorkHours),
+                            lateMinutes: lateMinutes,
+                            isLate: lateMinutes > 0,
+                            leaveHours: leaveHours,
+                            otHours: otHours,
+                            otPay: otPay,
+                            isOverworked: actualWorkHours > overworkThreshold
+                        });
+                    }
+
+                    processedData = parsedData;
+                    
+                    if(processedData.length === 0) {
+                        alert("解析不到有效的出勤資料，請確認檔案格式（需類似提供的範本格式）。");
+                        hideLoading();
+                        return;
+                    }
+
+                    updateDashboard(baseSalary, overworkThreshold, targetHour, targetMinute);
+
+                    setTimeout(() => {
+                        hideLoading();
+                        initialPlaceholder.classList.add('hidden');
+                        dashboardArea.classList.remove('hidden');
+                    }, 800); // Artificial delay for smooth UX
+
+                } catch (error) {
+                    console.error("Error processing file:", error);
+                    alert("檔案處理發生錯誤，請確認檔案格式是否正確。");
+                    hideLoading();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateDashboard(baseSalary, overworkThreshold, targetHour, targetMinute) {
+            // --- 1. Update KPIs ---
+            const totalDays = processedData.length;
+            const actualWorkDays = processedData.filter(d => d.actualWorkHours > 0).length;
+            const totalLateCount = processedData.filter(d => d.isLate).length;
+            const totalLateMins = processedData.reduce((sum, d) => sum + d.lateMinutes, 0);
+            const totalLeaveHours = processedData.reduce((sum, d) => sum + d.leaveHours, 0);
+            const totalOtHours = processedData.reduce((sum, d) => sum + d.otHours, 0);
+            const totalOtPay = processedData.reduce((sum, d) => sum + d.otPay, 0);
+
+            document.getElementById('kpi-workdays').textContent = `${actualWorkDays} / ${totalDays}`;
+            document.getElementById('kpi-late-count').textContent = `${totalLateCount} 次`;
+            document.getElementById('kpi-late-mins').textContent = `共計 ${totalLateMins} 分鐘`;
+            document.getElementById('kpi-leave-hours').textContent = `${totalLeaveHours.toFixed(1)} hr`;
+            document.getElementById('kpi-ot-hours').textContent = `${totalOtHours.toFixed(1)} hr`;
+            
+            // Format Currency
+            const formatter = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 });
+            document.getElementById('kpi-ot-pay').textContent = formatter.format(totalOtPay);
+
+            // --- 2. Update Charts ---
+            updateTrendChart(targetHour, targetMinute);
+            updateHeatmapChart(overworkThreshold);
+            updateLateDayChart();
+            updateLeaveMonthChart();
+
+            // --- 3. Generate Insights ---
+            generateInsights(actualWorkDays, totalLateCount, totalLateMins, overworkThreshold, totalOtHours, totalLeaveHours, totalDays);
+        }
+
+        const chartColors = {
+            blue: 'rgba(59, 130, 246, 0.8)',
+            blueBorder: 'rgb(59, 130, 246)',
+            red: 'rgba(239, 68, 68, 0.8)',
+            yellow: 'rgba(234, 179, 8, 0.8)',
+            slate: 'rgba(100, 116, 139, 0.2)'
+        };
+
+        function destroyChart(chartId) {
+            if (chartInstances[chartId]) {
+                chartInstances[chartId].destroy();
+            }
+        }
+
+        function updateTrendChart(targetHour, targetMinute) {
+            destroyChart('trendChart');
+            const validData = processedData.filter(d => d.startTotalMin !== null);
+            validData.sort((a, b) => a.date - b.date);
+
+            const labels = validData.map(d => {
+                const month = String(d.date.getMonth() + 1).padStart(2, '0');
+                const day = String(d.date.getDate()).padStart(2, '0');
+                return `${month}/${day}`;
+            });
+            const dataPoints = validData.map(d => d.startTotalMin / 60); // Convert to hours for Y axis
+            const targetLineData = validData.map(() => targetHour + targetMinute/60);
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            chartInstances['trendChart'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '打卡時間',
+                            data: dataPoints,
+                            borderColor: chartColors.blueBorder,
+                            backgroundColor: chartColors.blue,
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            tension: 0.3
+                        },
+                        {
+                            label: '約定時間',
+                            data: targetLineData,
+                            borderColor: 'rgba(34, 197, 94, 0.5)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            min: 7, // 07:00
+                            max: 12, // 12:00
+                            ticks: {
+                                callback: function(value) {
+                                    const h = Math.floor(value);
+                                    const m = Math.round((value - h) * 60);
+                                    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                                }
+                            }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    interaction: { mode: 'index', intersect: false }
+                }
+            });
+        }
+
+        function updateHeatmapChart(threshold) {
+            destroyChart('heatmapChart');
+            const validData = processedData.filter(d => d.actualWorkHours > 0);
+            validData.sort((a, b) => a.date - b.date);
+
+            const labels = validData.map(d => {
+                 const month = String(d.date.getMonth() + 1).padStart(2, '0');
+                 const day = String(d.date.getDate()).padStart(2, '0');
+                 return `${month}/${day}`;
+            });
+            const dataPoints = validData.map(d => d.actualWorkHours);
+            
+            // Color based on intensity
+            const backgroundColors = dataPoints.map(val => {
+                if(val > threshold) return 'rgba(239, 68, 68, 0.8)'; // Red for overwork
+                if(val > 9) return 'rgba(249, 115, 22, 0.8)'; // Orange for OT
+                return 'rgba(52, 211, 153, 0.8)'; // Green for normal
+            });
+
+            const ctx = document.getElementById('heatmapChart').getContext('2d');
+            chartInstances['heatmapChart'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '實際工時(小時)',
+                        data: dataPoints,
+                        backgroundColor: backgroundColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function updateLateDayChart() {
+            destroyChart('lateDayChart');
+            const lateData = processedData.filter(d => d.isLate);
+            const counts = [0, 0, 0, 0, 0, 0, 0]; // Sun to Sat
+            lateData.forEach(d => { counts[d.dayOfWeek]++; });
+
+            // Reorder to Mon-Sun
+            const displayCounts = [counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[0]];
+            const labels = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+
+            const ctx = document.getElementById('lateDayChart').getContext('2d');
+            chartInstances['lateDayChart'] = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '遲到次數',
+                        data: displayCounts,
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        pointBackgroundColor: 'rgba(239, 68, 68, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(239, 68, 68, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+        }
+
+        function updateLeaveMonthChart() {
+            destroyChart('leaveMonthChart');
+            const leaveByMonth = {};
+            processedData.forEach(d => {
+                if(d.leaveHours > 0) {
+                    leaveByMonth[d.monthStr] = (leaveByMonth[d.monthStr] || 0) + d.leaveHours;
+                }
+            });
+
+            const labels = Object.keys(leaveByMonth).sort();
+            const dataPoints = labels.map(k => leaveByMonth[k]);
+
+            const ctx = document.getElementById('leaveMonthChart').getContext('2d');
+            
+            if(dataPoints.length === 0) {
+                // Dummy data for visual feedback if no leave
+                chartInstances['leaveMonthChart'] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['無請假紀錄'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] },
+                    options: { plugins: { tooltip: { enabled: false } } }
+                });
+                return;
+            }
+
+            const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308'];
+            
+            chartInstances['leaveMonthChart'] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataPoints,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+
+        function generateInsights(actualWorkDays, totalLateCount, totalLateMins, overworkThreshold, totalOtHours, totalLeaveHours, totalDays) {
+            const diagList = document.getElementById('diagnosticList');
+            const recList = document.getElementById('recommendationList');
+            
+            diagList.innerHTML = '';
+            recList.innerHTML = '';
+
+            const insights = [];
+            const recs = [];
+
+            // 1. Attendance Stability
+            const lateRate = actualWorkDays > 0 ? (totalLateCount / actualWorkDays) * 100 : 0;
+            if (lateRate > 20) {
+                insights.push(`<li class="flex gap-3"><span class="text-red-500"><i class="fa-solid fa-circle-exclamation"></i></span> <span><strong class="text-gray-800">出勤穩定度低：</strong> 遲到率達 ${lateRate.toFixed(1)}% (共 ${totalLateCount} 次)，總遲到 ${totalLateMins} 分鐘。經常無法於約定時間前打卡。</span></li>`);
+                recs.push(`<div class="bg-red-50 border-l-4 border-red-500 p-3 rounded text-sm"><strong class="text-red-700">面談建議：</strong> 建議主管安排關懷面談，了解是否有通勤或家庭因素困難。若工作性質允許，可評估彈性工時方案。</div>`);
+            } else if (lateRate > 5) {
+                insights.push(`<li class="flex gap-3"><span class="text-yellow-500"><i class="fa-solid fa-triangle-exclamation"></i></span> <span><strong class="text-gray-800">出勤穩定度普通：</strong> 偶有遲到狀況 (遲到率 ${lateRate.toFixed(1)}%)，整體尚在可控範圍。</span></li>`);
+            } else {
+                insights.push(`<li class="flex gap-3"><span class="text-green-500"><i class="fa-solid fa-circle-check"></i></span> <span><strong class="text-gray-800">出勤穩定度高：</strong> 幾乎無遲到紀錄，出勤狀況非常優良。</span></li>`);
+            }
+
+            // 2. Overwork
+            const overworkDays = processedData.filter(d => d.isOverworked).length;
+            if (overworkDays > 3 || totalOtHours > 20) {
+                insights.push(`<li class="flex gap-3"><span class="text-red-500"><i class="fa-solid fa-fire"></i></span> <span><strong class="text-gray-800">高過勞風險：</strong> 共有 ${overworkDays} 天工時超過警戒線(${overworkThreshold}hr)，累積加班 ${totalOtHours.toFixed(1)} 小時。</span></li>`);
+                recs.push(`<div class="bg-orange-50 border-l-4 border-orange-500 p-3 rounded text-sm"><strong class="text-orange-700">工作量檢視：</strong> 員工長期處於高強度工作狀態。建議立即檢視其專案 Loading，重新分配任務，以避免員工倦怠流失。</div>`);
+            } else if (totalOtHours > 0) {
+                insights.push(`<li class="flex gap-3"><span class="text-blue-500"><i class="fa-solid fa-briefcase"></i></span> <span><strong class="text-gray-800">具備一定工作負荷：</strong> 偶有加班狀況，總加班 ${totalOtHours.toFixed(1)} 小時。</span></li>`);
+            } else {
+                insights.push(`<li class="flex gap-3"><span class="text-green-500"><i class="fa-solid fa-leaf"></i></span> <span><strong class="text-gray-800">工時健康：</strong> 無明顯加班狀況，工作生活平衡度佳。</span></li>`);
+            }
+
+            // 3. Leave Rate
+            const leaveRate = totalDays > 0 ? (processedData.filter(d => d.leaveHours > 0).length / totalDays) * 100 : 0;
+            if (leaveRate > 15) {
+                insights.push(`<li class="flex gap-3"><span class="text-purple-500"><i class="fa-solid fa-bed"></i></span> <span><strong class="text-gray-800">請假頻率偏高：</strong> 請假天數佔整體約 ${leaveRate.toFixed(1)}%。</span></li>`);
+                recs.push(`<div class="bg-purple-50 border-l-4 border-purple-500 p-3 rounded text-sm"><strong class="text-purple-700">健康與關懷：</strong> 若請假屬病假居多，建議關懷其健康狀況；若集中在特定月份，可檢視是否與專案淡旺季或個人事件有關。</div>`);
+            }
+
+            // Render
+            diagList.innerHTML = insights.join('');
+            
+            if (recs.length === 0) {
+                recList.innerHTML = `<div class="bg-green-50 border-l-4 border-green-500 p-3 rounded text-sm text-green-700"><i class="fa-solid fa-thumbs-up mr-2"></i>目前各項指標健康，維持現狀給予肯定即可。</div>`;
+            } else {
+                recList.innerHTML = recs.join('');
+            }
+        }
+
+        function showLoading() {
+            loadingOverlay.style.display = 'flex';
+        }
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

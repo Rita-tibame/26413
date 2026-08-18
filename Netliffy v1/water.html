@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日喝水紀錄</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 水波紋與水位上升的過渡動畫 */
+        .water-fill {
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.5s ease-in-out;
+        }
+
+        /* 隱藏 Chrome/Safari 的數字輸入框上下箭頭 */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+
+<body class="bg-blue-50 min-h-screen flex items-center justify-center p-4 font-sans">
+    <div class="bg-white rounded-3xl shadow-xl p-6 w-full max-w-md border border-blue-100">
+        <!-- 標題 -->
+        <h1 class="text-2xl font-bold text-center text-blue-800 mb-6 flex justify-center items-center gap-2">
+            <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                    d="M12 21.5c-3.31 0-6-2.63-6-5.88 0-3.33 2.5-6.84 5.6-11.45.21-.31.6-.31.8 0 3.1 4.61 5.6 8.12 5.6 11.45 0 3.25-2.69 5.88-6 5.88z" />
+            </svg>
+            每日喝水紀錄
+        </h1>
+
+        <!-- 視覺化進度圖表 -->
+        <div class="flex flex-col items-center mb-8">
+            <div
+                class="relative w-36 h-48 bg-gray-50 rounded-b-3xl rounded-t-xl overflow-hidden border-4 border-gray-200 shadow-inner">
+                <!-- 水位底色 -->
+                <div id="water-level" class="absolute bottom-0 w-full bg-blue-400 opacity-90 water-fill"
+                    style="height: 0%;"></div>
+                <!-- 百分比文字 -->
+                <div class="absolute inset-0 flex items-center justify-center z-10 drop-shadow-md">
+                    <span id="percentage-text" class="text-3xl font-bold text-gray-800 mix-blend-overlay">0%</span>
+                </div>
+            </div>
+            <div class="mt-4 text-gray-600 font-medium tracking-wide">
+                今日進度: <span id="current-text" class="text-blue-600 text-xl font-bold">0</span> / <span
+                    id="goal-text">2000</span> ml
+            </div>
+        </div>
+
+        <!-- 目標設定 -->
+        <div class="flex items-center justify-between mb-6 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+            <label class="text-gray-700 font-medium">🎯 每日目標 (ml)</label>
+            <input type="number" id="goal-input" value="2000"
+                class="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-right font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                onchange="updateGoal()">
+        </div>
+
+        <!-- 快速新增按鈕 -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            <button onclick="addWater(250)"
+                class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 py-3 rounded-xl font-bold transition flex flex-col items-center gap-1 active:scale-95">
+                <span class="text-lg">+250</span>
+                <span class="text-xs font-normal text-blue-500">水杯</span>
+            </button>
+            <button onclick="addWater(350)"
+                class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 py-3 rounded-xl font-bold transition flex flex-col items-center gap-1 active:scale-95">
+                <span class="text-lg">+350</span>
+                <span class="text-xs font-normal text-blue-500">馬克杯</span>
+            </button>
+            <button onclick="addWater(500)"
+                class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 py-3 rounded-xl font-bold transition flex flex-col items-center gap-1 active:scale-95">
+                <span class="text-lg">+500</span>
+                <span class="text-xs font-normal text-blue-500">寶特瓶</span>
+            </button>
+        </div>
+
+        <!-- 自訂新增 -->
+        <div class="flex gap-2 mb-8">
+            <input type="number" id="custom-amount" placeholder="自訂容量 (例如 150)"
+                class="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition">
+            <button onclick="addCustomWater()"
+                class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-bold transition shadow-md shadow-blue-200 active:scale-95">紀錄</button>
+        </div>
+
+        <!-- 歷史紀錄 -->
+        <div>
+            <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
+                <h3 class="text-lg font-bold text-gray-700">🕒 今日紀錄</h3>
+                <span class="text-xs text-gray-400" id="record-count">共 0 筆</span>
+            </div>
+            <ul id="record-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <!-- 紀錄項目會透過 JS 動態生成 -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- 應用程式邏輯 -->
+    <script>
+        // 應用程式狀態管理
+        let state = {
+            goal: 2000,
+            current: 0,
+            records: []
+        };
+
+        // 綁定 DOM 元素
+        const waterLevelEl = document.getElementById('water-level');
+        const percentageTextEl = document.getElementById('percentage-text');
+        const currentTextEl = document.getElementById('current-text');
+        const goalTextEl = document.getElementById('goal-text');
+        const recordListEl = document.getElementById('record-list');
+        const customAmountEl = document.getElementById('custom-amount');
+        const goalInputEl = document.getElementById('goal-input');
+        const recordCountEl = document.getElementById('record-count');
+
+        // 更新畫面 UI 函數
+        function updateUI() {
+            // 更新數值文字
+            currentTextEl.textContent = state.current;
+            goalTextEl.textContent = state.goal;
+            recordCountEl.textContent = `共 ${state.records.length} 筆`;
+
+            // 計算百分比並更新進度條
+            let percentage = Math.round((state.current / state.goal) * 100);
+            if (percentage > 100) percentage = 100; // 最高顯示 100%
+
+            percentageTextEl.textContent = percentage + '%';
+            waterLevelEl.style.height = percentage + '%';
+
+            // 若達標，改變水杯顏色給予回饋
+            if (state.current >= state.goal) {
+                waterLevelEl.classList.remove('bg-blue-400');
+                waterLevelEl.classList.add('bg-green-400');
+            } else {
+                waterLevelEl.classList.add('bg-blue-400');
+                waterLevelEl.classList.remove('bg-green-400');
+            }
+
+            // 重新渲染歷史紀錄列表
+            recordListEl.innerHTML = '';
+            if (state.records.length === 0) {
+                recordListEl.innerHTML = '<li class="text-gray-400 text-center text-sm py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">尚無紀錄，趕快喝杯水吧！💧</li>';
+            } else {
+                // 將陣列反轉，讓最新的紀錄顯示在最上方
+                const reversedRecords = [...state.records].reverse();
+                reversedRecords.forEach(record => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center bg-gray-50 hover:bg-gray-100 p-3 rounded-xl border border-gray-100 transition';
+                    li.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-lg text-sm">+${record.amount} ml</span>
+                            <span class="text-gray-500 text-sm font-medium">${record.time}</span>
+                        </div>
+                        <button onclick="deleteRecord('${record.id}')" class="text-gray-400 hover:text-red-500 hover:bg-red-50 w-8 h-8 rounded-full flex items-center justify-center transition" title="刪除紀錄">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    `;
+                    recordListEl.appendChild(li);
+                });
+            }
+        }
+
+        // 新增喝水紀錄
+        function addWater(amount) {
+            const now = new Date();
+            // 格式化時間 (HH:MM)
+            const timeString = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+            const newRecord = {
+                id: Date.now().toString(), // 用時間戳當作唯一 ID
+                amount: amount,
+                time: timeString
+            };
+
+            state.records.push(newRecord);
+            state.current += amount;
+            updateUI(); // 每次更動狀態後重新渲染
+        }
+
+        // 處理自訂輸入的新增
+        function addCustomWater() {
+            const amount = parseInt(customAmountEl.value);
+            if (isNaN(amount) || amount <= 0) {
+                alert('請輸入有效的數字容量！');
+                return;
+            }
+            addWater(amount);
+            customAmountEl.value = ''; // 清空輸入框
+        }
+
+        // 刪除特定紀錄
+        function deleteRecord(id) {
+            const index = state.records.findIndex(r => r.id === id);
+            if (index !== -1) {
+                // 扣除當前累積水量並移除紀錄
+                state.current -= state.records[index].amount;
+                state.records.splice(index, 1);
+                updateUI();
+            }
+        }
+
+        // 更新每日目標
+        function updateGoal() {
+            const newGoal = parseInt(goalInputEl.value);
+            if (isNaN(newGoal) || newGoal <= 0) {
+                alert('請輸入有效的目標容量！');
+                goalInputEl.value = state.goal; // 恢復原值
+                return;
+            }
+            state.goal = newGoal;
+            updateUI();
+        }
+
+        // 可以監聽 Enter 鍵來快速新增自訂容量
+        customAmountEl.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                addCustomWater();
+            }
+        });
+
+        // 初始化第一次渲染畫面
+        updateUI();
+    </script>
+</body>
+
+</html>
