@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>貓咪照護大調查 - 多視角分析儀表板</title>
+    <title>貓咪照護大調查 - 吉伊卡哇多視角儀表板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -44,20 +44,32 @@
             <!-- 視角切換器 (Tab Switcher) -->
             <div class="flex bg-black/10 p-1 rounded-xl flex-wrap justify-center gap-1 mt-2 md:mt-0">
                 <button onclick="setTheme('internal')" id="btn-internal" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
-                    <i class="fa-solid fa-code"></i> 內部人員
+                    <span>🐱</span> 小八・內部人員
                 </button>
                 <button onclick="setTheme('user')" id="btn-user" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
-                    <i class="fa-solid fa-gamepad"></i> 飼主互動
+                    <span>🐰</span> 烏薩奇・飼主互動
                 </button>
                 <button onclick="setTheme('educator')" id="btn-educator" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
-                    <i class="fa-solid fa-stethoscope"></i> 教育醫療
+                    <span>🐹</span> 吉伊・教育醫療
                 </button>
                 <button onclick="setTheme('business')" id="btn-business" class="tab-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
-                    <i class="fa-solid fa-briefcase"></i> 商業公關
+                    <span>🐿️</span> 小桃・商業公關
                 </button>
             </div>
         </div>
     </header>
+
+    <!-- 角色對話框：點一下會換一句台詞 -->
+    <div class="max-w-6xl mx-auto px-4 mb-6">
+        <button id="mascot" onclick="nextLine()" class="w-full text-left flex items-center gap-4 p-4 rounded-3xl border-2 shadow-sm theme-transition">
+            <span id="mascot-emoji" class="text-4xl select-none shrink-0">🐱</span>
+            <span class="flex flex-col">
+                <span id="mascot-name" class="text-xs font-black tracking-wider opacity-70">角色</span>
+                <span id="mascot-line" class="text-base font-bold">台詞載入中...</span>
+            </span>
+            <span class="ml-auto text-xs font-bold opacity-50 shrink-0 hidden sm:inline">點我換一句 ›</span>
+        </button>
+    </div>
 
     <main class="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         
@@ -176,11 +188,15 @@
                     c4IconBg: 'bg-indigo-900/50', c4IconText: 'text-indigo-400', c4BoxBg: 'bg-indigo-900/30', c4BoxBorder: 'border-indigo-500', c4BoxText: 'text-indigo-300'
                 },
                 content: {
-                    mainTitle: 'App 產品開發數據中樞', subTitle: '基於市調數據的 UI/UX 與功能決策指標', headerIcon: 'fa-server',
-                    c1Title: '1. 目標受眾與獲客輪廓', c1Desc: '核心轉換群體之經驗分佈分析。', c1Insight: 'Insight: 1-3年經驗者佔 45%。行銷素材與 Onboarding 流程應主打「進階照護痛點」以提高留存率。',
-                    c2Title: '2. 知識斷層與功能缺口', c2Desc: 'AAFCO 標準認知誤區量化分析。', c2Insight: 'Insight: 70% 具備嚴重認知誤區。強烈建議在 App 內建置「營養標籤解析」互動式教學模組。', c2Tag: 'P0 級產品開發重點', c2Center: '知識盲點',
-                    c3Title: '3. 交叉分析：年資 vs 決策延誤', c3Desc: '新手與老手在尋求醫療介入的時間差比對。', c3Insight: 'Insight: 新手容易緊張而提早就醫；老手反而因自信而延誤(過度觀察)。需針對老手推播進階警示。',
-                    c4Title: '4. 交叉分析：年資 vs 功能偏好', c4Desc: '不同年資飼主，對功能入口之 A/B 偏好測試。', c4Insight: 'Insight: 新手極度依賴清單(Checklist)，老手偏好對話(Chat)。Onboarding 應按年資進行功能分流。'
+                    mainTitle: '小八的 App 開發數據中樞', subTitle: '冷靜看數據，總會有辦法的～', headerIcon: 'fa-server',
+                    c1Title: '1. 目標受眾與獲客輪廓', c1Desc: '小八先來整理一下核心轉換群體的經驗分佈～', c1Insight: '小八分析：1-3年經驗者佔 45% 喔。Onboarding 和行銷素材主打「進階照護痛點」，留存率一定會上來的，沒問題的～',
+                    c2Title: '2. 知識斷層與功能缺口', c2Desc: 'AAFCO 標準認知誤區量化分析。', c2Insight: '小八分析：有 70% 的人誤會了 AAFCO 標準…有點嚴重呢。先做「營養標籤解析」互動教學模組吧，一步一步來就好！', c2Tag: 'P0 級，小八先做這個', c2Center: '知識盲點',
+                    c3Title: '3. 交叉分析：年資 vs 決策延誤', c3Desc: '新手與老手在尋求醫療介入的時間差比對。', c3Insight: '小八分析：新手會緊張提早就醫，老手反而太有自信、觀察太久。針對老手推播進階警示，就能補起來了～',
+                    c4Title: '4. 交叉分析：年資 vs 功能偏好', c4Desc: '不同年資飼主，對功能入口之 A/B 偏好測試。', c4Insight: '小八分析：新手很依賴清單 (Checklist)，老手比較喜歡對話 (Chat)。Onboarding 依年資分流，大家都會開心的！'
+                },
+                character: {
+                    name: '小八', emoji: '🐱', role: '內部人員・樂觀冷靜的分析擔當',
+                    lines: ['沒問題的～總會有辦法的！', '數據看起來有點可怕，但一個一個解決就好了～', '小八今天也想把這個 App 做好！', '先冷靜下來，看看圖表在說什麼吧。']
                 },
                 charts: {
                     pieColors: ['#475569', '#3b82f6', '#10b981'],
@@ -203,11 +219,15 @@
                     c4IconBg: 'bg-pink-100', c4IconText: 'text-pink-500', c4BoxBg: 'bg-pink-50', c4BoxBorder: 'border-pink-400', c4BoxText: 'text-pink-800'
                 },
                 content: {
-                    mainTitle: '哈囉貓奴！來解鎖你的專屬成就不？', subTitle: '看看你跟其他飼主的默契度 🐾 邊玩邊學！', headerIcon: 'fa-gamepad',
-                    c1Title: '1. 測測你的貓奴等級！', c1Desc: '看看你在貓奴村裡是萌新還是長老？', c1Insight: '【同溫層比較】你的貓5歲了？有60%的5歲貓奴最關心泌尿道，要不要也測一下？',
-                    c2Title: '2. 破除迷思大挑戰！', c2Desc: '關於飼料包裝的秘密，你闖關成功了嗎？', c2Insight: '【破除迷思】答錯別灰心！70%的飼主一開始都答錯了。正確解答就在 App 裡喔！', c2Tag: '🎮 挑戰任務', c2Center: '解鎖解答',
-                    c3Title: '3. 主子吐了！你的反應時間是？', c3Desc: '遇到嘔吐不吃飯，看看大家的緊急應變！', c3Insight: '【小任務】貓咪很會忍痛，超過24小時沒吃飯就有危險！快啟用 App 的健康計時器吧！',
-                    c4Title: '4. 遇到困難，你喜歡哪種神隊友？', c4Desc: '喜歡「點選清單」還是「呼叫 AI 醫生」？', c4Insight: '【功能解鎖】大家各有喜好！在 App 裡只要完成日常簽到，兩種超棒功能都能免費體驗！'
+                    mainTitle: '呀哈！貓奴成就解鎖大作戰！！', subTitle: '噗嚕嚕嚕…邊玩邊學 🐾 烏拉！', headerIcon: 'fa-gamepad',
+                    c1Title: '1. 呀哈！測測你的貓奴等級！', c1Desc: '萌新？長老？哈？快來看看你在哪！', c1Insight: '【烏薩奇偷看】你的貓5歲了？60%的5歲貓奴都在顧泌尿道！呀哈！快去測一下！！',
+                    c2Title: '2. 嗚拉！破除迷思大挑戰！', c2Desc: '飼料包裝的秘密…噗嚕嚕，你闖過了嗎？', c2Insight: '【破除迷思】答錯了？哈？沒關係！70%的飼主一開始都答錯！解答在 App 裡，衝啊——！', c2Tag: '🎮 呀哈任務', c2Center: '解鎖解答',
+                    c3Title: '3. 主子吐了！！你的反應時間是？', c3Desc: '嘔吐不吃飯！大家怎麼辦？烏拉？', c3Insight: '【小任務】貓咪超會忍痛！超過24小時沒吃飯就危險了！哈！快開 App 的健康計時器！！',
+                    c4Title: '4. 你想要哪種神隊友？呀哈？', c4Desc: '「點選清單」還是「呼叫 AI 醫生」？二選一！', c4Insight: '【功能解鎖】兩個都想要？呀哈！每天簽到，兩種功能都能免費玩！噗嚕嚕嚕嚕！'
+                },
+                character: {
+                    name: '烏薩奇', emoji: '🐰', role: '飼主互動・精力爆表的氣氛擔當',
+                    lines: ['呀哈！', '烏拉！烏拉！', '噗嚕嚕嚕嚕嚕…', '哈？', '呀————哈！！一起闖關！']
                 },
                 charts: {
                     pieColors: ['#fca5a5', '#fdba74', '#fde047'],
@@ -230,11 +250,15 @@
                     c4IconBg: 'bg-teal-50', c4IconText: 'text-teal-600', c4BoxBg: 'bg-teal-50', c4BoxBorder: 'border-teal-500', c4BoxText: 'text-teal-900'
                 },
                 content: {
-                    mainTitle: '貓科臨床衛教與醫病溝通分析', subTitle: '基於飼主認知落差與就醫行為之統計報告', headerIcon: 'fa-stethoscope',
-                    c1Title: '1. 衛教目標受眾結構', c1Desc: '樣本群體之照護經驗常態分佈。', c1Insight: '臨床洞察：多數衛教對象為 1-3 年經驗者。具備基礎認知但易受網路未經驗證之資訊誤導，需提供文獻實證。',
-                    c2Title: '2. 商業食品認知風險', c2Desc: '飼主對國際營養標準(AAFCO)之誤解比例。', c2Insight: '臨床洞察：高達七成過度依賴單一底線標準。門診衛教時應主動介入，強化「食材來源與加工方式」之重要性。', c2Tag: '⚠️ 核心衛教指標', c2Center: '觀念落差',
-                    c3Title: '3. 延誤就醫 (Delay in Care) 分析', c3Desc: '消化道症狀發生至尋求醫療介入之時間差。', c3Insight: '臨床洞察：近半數(48%)飼主錯失黃金治療期(24h)。需加強宣導貓科動物隱藏病痛之天性與急症預兆。',
-                    c4Title: '4. 醫病數位溝通偏好', c4Desc: '飼主尋求醫療判斷資訊之介面偏好。', c4Insight: '臨床洞察：資深飼主偏好對話式介面。未來可於看診前導入初步問診 AI，協助醫師系統化收集病史。'
+                    mainTitle: '吉伊的貓科衛教小筆記', subTitle: '嗚…有點害怕，但吉伊會認真把數據看完的', headerIcon: 'fa-stethoscope',
+                    c1Title: '1. 衛教目標受眾結構', c1Desc: '樣本群體之照護經驗常態分佈。', c1Insight: '吉伊的筆記：大部分是 1-3 年經驗的飼主…他們懂一些，可是很容易被網路上沒有證據的說法騙到。要好好準備文獻資料才行（握拳）',
+                    c2Title: '2. 商業食品認知風險', c2Desc: '飼主對國際營養標準 (AAFCO) 之誤解比例。', c2Insight: '嗚嗚…七成的人以為只要符合底線標準就安心了…門診衛教時要主動說明「食材來源與加工方式」，吉伊會努力的！', c2Tag: '⚠️ 咿…核心衛教指標', c2Center: '觀念落差',
+                    c3Title: '3. 延誤就醫 (Delay in Care) 分析', c3Desc: '消化道症狀發生至尋求醫療介入之時間差。', c3Insight: '咿呀…！近半數 (48%) 飼主錯過了黃金治療期 (24h)…貓咪會偷偷忍痛，一定要讓大家知道急症的預兆才行（淚）',
+                    c4Title: '4. 醫病數位溝通偏好', c4Desc: '飼主尋求醫療判斷資訊之介面偏好。', c4Insight: '吉伊的筆記：資深飼主比較喜歡對話式介面。看診前先用 AI 初步問診，幫醫師整理病史…這樣大家都比較不會慌張了吧？'
+                },
+                character: {
+                    name: '吉伊卡哇', emoji: '🐹', role: '教育醫療・膽小但超認真的衛教擔當',
+                    lines: ['嗚…（但還是會努力的！）', '咿呀…！貓咪不舒服的時候要早點去看醫生…', '吉伊也有在念書喔…（翻筆記）', '大家一起保護主子吧…嗚嗚']
                 },
                 charts: {
                     pieColors: ['#94a3b8', '#0ea5e9', '#0f766e'],
@@ -257,11 +281,15 @@
                     c4IconBg: 'bg-purple-500/20', c4IconText: 'text-purple-400', c4BoxBg: 'bg-purple-500/10', c4BoxBorder: 'border-purple-500', c4BoxText: 'text-purple-200'
                 },
                 content: {
-                    mainTitle: '商業合作、募資提案與 PR 行銷', subTitle: '數據變現、B2B 導流與社群話題切入點', headerIcon: 'fa-briefcase',
-                    c1Title: '1. 用戶 LTV 與核心受眾', c1Desc: '募資亮點：找出最容易轉換的高淨值客群。', c1Insight: '商業價值：45%為具備消費力的1-3年飼主，是推動訂閱制與高單價電商導購的黃金客群。',
-                    c2Title: '2. 品牌導購潛力 & PR 行銷', c2Desc: '社群話題：利用知識落差建立社群共鳴。', c2Insight: 'PR 操作：「7成貓奴誤解飲食」可作公關話題。B2B：高轉換潛力，可向食品品牌提案贊助模組。', c2Tag: '💰 B2B 合作', c2Center: '導購紅利',
-                    c3Title: '3. 獸醫院 B2B 導流價值', c3Desc: '提案痛點：48% 飼主會猶豫不決而延誤就醫。', c3Insight: 'B2B 提案：App 警示功能可將猶豫病患提早 12 小時導流至實體診所，增加院所來客並減少糾紛。',
-                    c4Title: '4. 產品變現漏斗 (Monetization)', c4Desc: '商業模式：由淺入深打造付費護城河。', c4Insight: '變現策略：以免費「檢核清單」引流拉新，並將進階的「AI 對話問答」包裝為高毛利付費訂閱服務。'
+                    mainTitle: '小桃的商業提案（快誇我！）', subTitle: '數據變現、B2B 導流、社群話題…全部都是小桃找到的喔', headerIcon: 'fa-briefcase',
+                    c1Title: '1. 用戶 LTV 與核心受眾', c1Desc: '募資亮點：最容易轉換的高淨值客群，小桃一眼就看出來了。', c1Insight: '商業價值：45% 是有消費力的 1-3 年飼主！訂閱制和高單價導購的黃金客群～這麼厲害的發現，快誇我！',
+                    c2Title: '2. 品牌導購潛力 & PR 行銷', c2Desc: '社群話題：利用知識落差，讓大家都注意到我們（和小桃）。', c2Insight: 'PR 操作：「7成貓奴誤解飲食」一定會爆紅！B2B 就去跟食品品牌提案贊助模組～是不是很聰明？誇我嘛～', c2Tag: '💰 小桃的 B2B 大計畫', c2Center: '導購紅利',
+                    c3Title: '3. 獸醫院 B2B 導流價值', c3Desc: '提案痛點：48% 飼主會猶豫不決而延誤就醫。', c3Insight: 'B2B 提案：App 警示功能可以把猶豫的病患提早 12 小時導到診所！院所來客變多、糾紛變少～這種提案只有小桃想得到吧？',
+                    c4Title: '4. 產品變現漏斗 (Monetization)', c4Desc: '商業模式：由淺入深打造付費護城河。', c4Insight: '變現策略：免費「檢核清單」拉新，進階「AI 對話問答」包成高毛利訂閱～賺到錢要記得分小桃喔！'
+                },
+                character: {
+                    name: '小桃', emoji: '🐿️', role: '商業公關・最愛被稱讚的焦點擔當',
+                    lines: ['快誇我！快誇我！', '這份提案這麼棒，都是小桃的功勞喔～', '大家都在看小桃對吧？嘿嘿', '不誇我的話…小桃要鬧脾氣了喔！']
                 },
                 charts: {
                     pieColors: ['#64748b', '#facc15', '#10b981'],
@@ -273,6 +301,15 @@
         };
 
         let chartInstances = {};
+        let currentTheme = 'internal';
+        let lineIndex = 0;
+
+        // 點角色對話框時，輪播下一句台詞
+        function nextLine() {
+            const lines = THEMES[currentTheme].character.lines;
+            lineIndex = (lineIndex + 1) % lines.length;
+            document.getElementById('mascot-line').textContent = `「${lines[lineIndex]}」`;
+        }
 
         function renderCharts(themeKey) {
             const data = THEMES[themeKey].charts;
@@ -374,7 +411,7 @@
             document.getElementById('header-icon').className = `fa-solid ${t.headerIcon} text-xl theme-transition ${c.headerIconText}`;
             document.getElementById('main-title').textContent = t.mainTitle;
             document.getElementById('sub-title').textContent = t.subTitle;
-            document.getElementById('sub-title').className = `text-sm font-semibold theme-transition mt-0.5 ${themeKey==='internal' ? 'text-slate-400' : 'text-gray-500'}`;
+            document.getElementById('sub-title').className = `text-sm font-semibold theme-transition mt-0.5 ${['internal', 'business'].includes(themeKey) ? 'text-slate-400' : 'text-gray-500'}`;
 
             // 4. 更新卡片背景與邊框
             document.querySelectorAll('.ui-card').forEach(card => {
@@ -415,7 +452,15 @@
             document.getElementById('card4-insight').textContent = t.c4Insight;
             document.querySelector('.insight-box-4').className = `insight-box-4 mt-6 border-l-4 p-4 rounded-r-xl theme-transition ${c.c4BoxBg} ${c.c4BoxBorder} ${c.c4BoxText}`;
 
-            // 9. 重新渲染圖表顏色
+            // 9. 更新角色對話框
+            const ch = theme.character;
+            currentTheme = themeKey; lineIndex = 0;
+            document.getElementById('mascot').className = `w-full text-left flex items-center gap-4 p-4 rounded-3xl border-2 shadow-sm theme-transition ${c.c1BoxBg} ${c.c1BoxBorder} ${c.c1BoxText}`;
+            document.getElementById('mascot-emoji').textContent = ch.emoji;
+            document.getElementById('mascot-name').textContent = `${ch.name}｜${ch.role}`;
+            document.getElementById('mascot-line').textContent = `「${ch.lines[0]}」`;
+
+            // 10. 重新渲染圖表顏色
             renderCharts(themeKey);
         }
 
