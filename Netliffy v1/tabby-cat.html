@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我家的虎斑貓 3D</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-top: #f6efe6;
+            --bg-bottom: #e8dccb;
+            --text: #3b2f25;
+            --text-muted: #7a6a5a;
+            --panel: rgba(255, 255, 255, 0.55);
+            --panel-border: rgba(255, 255, 255, 0.7);
+            --accent: #c07a3a;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-top: #1d1a24;
+                --bg-bottom: #0f0e14;
+                --text: #f1e9df;
+                --text-muted: #b3a798;
+                --panel: rgba(255, 255, 255, 0.06);
+                --panel-border: rgba(255, 255, 255, 0.1);
+                --accent: #e8a463;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+            color: var(--text);
+            background: radial-gradient(ellipse at 50% 35%, var(--bg-top) 0%, var(--bg-bottom) 75%);
+            overflow: hidden;
+        }
+        #stage { position: fixed; inset: 0; touch-action: none; }
+        .header {
+            position: fixed; top: 16px; left: 16px; right: 16px;
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+            pointer-events: none;
+        }
+        .title h1 { font-size: clamp(1.3rem, 4vw, 2rem); font-weight: 700; letter-spacing: -0.01em; }
+        .title p { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
+        .back {
+            pointer-events: auto; text-decoration: none; color: var(--text);
+            background: var(--panel); border: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 8px 14px; border-radius: 999px; font-size: 0.9rem; white-space: nowrap;
+        }
+        .controls {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+            width: calc(100% - 32px); max-width: 520px;
+        }
+        .controls button {
+            font: inherit; font-size: 0.95rem; color: var(--text); cursor: pointer;
+            background: var(--panel); border: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 10px 16px; border-radius: 999px; transition: transform 0.2s ease;
+        }
+        .controls button:hover { transform: translateY(-2px); }
+        .controls button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+        .hint {
+            position: fixed; bottom: 76px; left: 0; right: 0; text-align: center;
+            color: var(--text-muted); font-size: 0.8rem; pointer-events: none;
+        }
+        .loading {
+            position: fixed; inset: 0; display: grid; place-items: center;
+            color: var(--text-muted); font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="stage" aria-label="可旋轉的 3D 虎斑貓"></div>
+    <div class="loading" id="loading">貓咪準備中…</div>
+
+    <div class="header">
+        <div class="title">
+            <h1>我家的虎斑貓 · 3D</h1>
+            <p>程序化建模＋殼層毛髮，照真貓的花紋設計</p>
+        </div>
+        <a class="back" href="index.html">← 作品集</a>
+    </div>
+
+    <p class="hint">拖曳旋轉・滾輪縮放・點貓咪摸摸頭</p>
+    <div class="controls">
+        <button id="btn-pet" type="button">🤚 摸摸頭</button>
+        <button id="btn-sleepy" type="button" aria-pressed="false">😪 想睡覺</button>
+        <button id="btn-spin" type="button" aria-pressed="false">🔄 自動旋轉</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ===== 毛色（取自真貓照片：棕色鯖魚紋虎斑、白下巴、黑尾尖）=====
+        const COLORS = {
+            base: '#85715a',     // 帶麻點的棕褐底色
+            light: '#b9a07e',    // 肚子、腿內側
+            stripe: '#2b2219',   // 深色條紋
+            dorsal: '#3a2e22',   // 背脊
+            white: '#ddd2c2',    // 下巴、口鼻
+            nose: '#c98576',
+            earInner: '#d9a59a',
+        };
+
+        // ===== 程序化花紋貼圖 =====
+        const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+
+        function canvasTexture(w, h, paint) {
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const g = c.getContext('2d');
+            paint(g, w, h);
+            const t = new THREE.CanvasTexture(c);
+            t.colorSpace = THREE.SRGBColorSpace;
+            t.anisotropy = 4;
+            return t;
+        }
+
+        // 麻點（agouti 毛色每根毛都有深淺段，近看是細碎雜點）
+        function ticking(g, w, h, amount = 9000) {
+            for (let i = 0; i < amount; i++) {
+                const light = rand() > 0.5;
+                g.fillStyle = light ? 'rgba(230,205,160,0.18)' : 'rgba(40,30,20,0.16)';
+                g.fillRect(rand() * w, rand() * h, 1 + rand() * 2, 2 + rand() * 4);
+            }
+        }
+
+        // 一條帶抖動的條紋：沿 x 方向走，y 依 sine 起伏
+        function wavyBand(g, w, y, thick, opts = {}) {
+            const { amp = 6, freq = 3, from = 0, to = w, alpha = 0.9 } = opts;
+            g.fillStyle = COLORS.stripe;
+            g.globalAlpha = alpha;
+            g.beginPath();
+            const phase = rand() * Math.PI * 2;
+            for (let x = from; x <= to; x += 4) {
+                const yy = y + Math.sin(x / w * Math.PI * 2 * freq + phase) * amp + (rand() - 0.5) * 2;
+                const t = thick * (0.6 + 0.4 * Math.sin((x - from) / (to - from) * Math.PI));
+                if (x === from) g.moveTo(x, yy - t / 2); else g.lineTo(x, yy - t / 2);
+            }
+            for (let x = to; x >= from; x -= 4) {
+                const yy = y + Math.sin(x / w * Math.PI * 2 * freq + phase) * amp;
+                const t = thick * (0.6 + 0.4 * Math.sin((x - from) / (to - from) * Math.PI));
+                g.lineTo(x, yy + t / 2);
+            }
+            g.closePath(); g.fill();
+            g.globalAlpha = 1;
+        }
+
+        // 軀幹：SphereGeometry 的 u=0.25 是正面（+z），u=0.75 是背面
+        const bodyTex = canvasTexture(1024, 512, (g, w, h) => {
+            g.fillStyle = COLORS.base; g.fillRect(0, 0, w, h);
+            // 胸腹較淺
+            const belly = g.createRadialGradient(w * 0.25, h * 0.6, 10, w * 0.25, h * 0.6, w * 0.22);
+            belly.addColorStop(0, COLORS.light); belly.addColorStop(1, 'rgba(201,173,133,0)');
+            g.fillStyle = belly; g.fillRect(0, 0, w, h);
+            // 背脊深色帶
+            const dorsal = g.createLinearGradient(w * 0.6, 0, w * 0.9, 0);
+            dorsal.addColorStop(0, 'rgba(58,46,34,0)'); dorsal.addColorStop(0.5, 'rgba(58,46,34,0.85)');
+            dorsal.addColorStop(1, 'rgba(58,46,34,0)');
+            g.fillStyle = dorsal; g.fillRect(0, 0, w, h);
+            // 鯖魚紋：從背脊往兩側延伸、繞著身體的橫帶，正面（胸口）留空
+            for (let y = 30; y < h - 15; y += 24 + rand() * 10) {
+                // 每條紋分成幾段，像真貓那樣斷斷續續
+                const segs = [[0.38, 0.62], [0.6, 0.86], [0.84, 1.0], [0.0, 0.12]];
+                for (const [a, b] of segs) {
+                    if (rand() < 0.15) continue;
+                    wavyBand(g, w, y + (rand() - 0.5) * 8, 7 + rand() * 6,
+                             { from: w * (a + rand() * 0.03), to: w * (b - rand() * 0.03), amp: 6, freq: 2.5, alpha: 0.82 });
+                }
+            }
+            ticking(g, w, h);
+        });
+
+        // 胸口：淺色＋零星斑點
+        const chestTex = canvasTexture(512, 256, (g, w, h) => {
+            g.fillStyle = COLORS.light; g.fillRect(0, 0, w, h);
+            const grad = g.createLinearGradient(0, 0, 0, h * 0.35);
+            grad.addColorStop(0, COLORS.white); grad.addColorStop(1, 'rgba(236,228,216,0)');
+            g.fillStyle = grad; g.fillRect(0, 0, w, h);
+            for (let y = 70; y < h; y += 30) wavyBand(g, w, y, 7, { amp: 4, freq: 3, alpha: 0.55 });
+            ticking(g, w, h, 3000);
+        });
+
+        // 頭：額頭 M 字＋直紋、臉頰橫紋、下半臉偏淺
+        const headTex = canvasTexture(1024, 512, (g, w, h) => {
+            g.fillStyle = COLORS.base; g.fillRect(0, 0, w, h);
+            const fx = w * 0.25; // 正面中心
+            // 額頭直紋
+            g.strokeStyle = COLORS.stripe; g.lineCap = 'round';
+            for (let i = -3; i <= 3; i++) {
+                g.lineWidth = i === 0 ? 9 : 7;
+                g.globalAlpha = 0.85;
+                g.beginPath();
+                g.moveTo(fx + i * 14, h * 0.32 - Math.abs(i) * 6);
+                g.quadraticCurveTo(fx + i * 18, h * 0.15, fx + i * 26, 0);
+                g.stroke();
+            }
+            // 頭頂往後的條紋
+            for (let x = w * 0.5; x < w; x += 22) {
+                g.lineWidth = 10; g.beginPath();
+                g.moveTo(x, 0); g.lineTo(x + 8, h * 0.3); g.stroke();
+            }
+            // 臉頰橫紋（兩側）
+            g.lineWidth = 8;
+            for (const side of [-1, 1]) {
+                for (let k = 0; k < 2; k++) {
+                    g.beginPath();
+                    const sx = fx + side * 70, sy = h * (0.5 + k * 0.08);
+                    g.moveTo(sx, sy);
+                    g.quadraticCurveTo(sx + side * 70, sy - 12, sx + side * 150, sy + 6);
+                    g.stroke();
+                }
+            }
+            g.globalAlpha = 1;
+            // 眼睛周圍淺色眼線
+            for (const side of [-1, 1]) {
+                const eg = g.createRadialGradient(fx + side * 60, h * 0.46, 4, fx + side * 60, h * 0.46, 46);
+                eg.addColorStop(0, 'rgba(236,228,216,0.9)'); eg.addColorStop(1, 'rgba(236,228,216,0)');
+                g.fillStyle = eg; g.fillRect(0, 0, w, h);
+            }
+            // 下半臉偏淺
+            const low = g.createLinearGradient(0, h * 0.55, 0, h);
+            low.addColorStop(0, 'rgba(201,173,133,0)'); low.addColorStop(1, COLORS.light);
+            g.fillStyle = low; g.fillRect(0, 0, w, h);
+            ticking(g, w, h, 6000);
+        });
+
+        // 腿、尾巴：沿長度方向的環紋（CapsuleGeometry 的 v 沿長度）
+        function ringTex(rings, tipBlack = false) {
+            return canvasTexture(256, 512, (g, w, h) => {
+                g.fillStyle = tipBlack ? COLORS.stripe : COLORS.base; g.fillRect(0, 0, w, h);
+                if (!tipBlack) {
+                    const inner = g.createLinearGradient(0, 0, w, 0);
+                    inner.addColorStop(0.1, 'rgba(201,173,133,0.7)'); inner.addColorStop(0.35, 'rgba(201,173,133,0)');
+                    g.fillStyle = inner; g.fillRect(0, 0, w, h);
+                    for (let i = 0; i < rings; i++) {
+                        const y = (i + 0.5) / rings * h;
+                        wavyBand(g, w, y, h / rings * 0.38, { amp: 3, freq: 1, from: w * 0.2, to: w, alpha: 0.88 });
+                    }
+                }
+                ticking(g, w, h, 1500);
+            });
+        }
+        const legTex = ringTex(5);
+        const tailTex = ringTex(2);
+        const tailTipTex = ringTex(0, true);
+
+        const plainTex = (color) => canvasTexture(64, 64, (g, w, h) => {
+            g.fillStyle = color; g.fillRect(0, 0, w, h); ticking(g, w, h, 120);
+        });
+        const whiteTex = plainTex(COLORS.white);
+        const lightTex = plainTex(COLORS.light);
+
+        // ===== 殼層毛髮（shell fur）=====
+        // 同一個幾何體疊 N 層，每層沿法線外推；越外層保留的毛越少，看起來就像一根根毛。
+        // 用 InstancedMesh 把 N 層合成一次繪製，層號取自 gl_InstanceID。
+        const FUR_LAYERS = window.matchMedia('(max-width: 640px)').matches ? 10 : 16;
+
+        function furMaterial(map, { length = 0.012, density = 220 } = {}) {
+            const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.92, metalness: 0 });
+            mat.onBeforeCompile = (shader) => {
+                shader.uniforms.uFurLen = { value: length };
+                shader.uniforms.uDensity = { value: density };
+                shader.uniforms.uLayers = { value: FUR_LAYERS - 1 };
+                shader.vertexShader = shader.vertexShader
+                    .replace('#include <common>', `#include <common>
+                        uniform float uFurLen; uniform float uLayers;
+                        varying float vFurLayer; varying vec2 vFurUv;`)
+                    .replace('#include <begin_vertex>', `#include <begin_vertex>
+                        vFurLayer = float(gl_InstanceID) / uLayers;
+                        vFurUv = uv;
+                        // 外層微微下垂，毛才不會像刺蝟
+                        transformed += normal * uFurLen * vFurLayer
+                                     + vec3(0.0, -1.0, 0.0) * uFurLen * 0.35 * vFurLayer * vFurLayer;`);
+                shader.fragmentShader = shader.fragmentShader
+                    .replace('#include <common>', `#include <common>
+                        uniform float uDensity;
+                        varying float vFurLayer; varying vec2 vFurUv;
+                        float furHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
+                    .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+                        if (vFurLayer > 0.0) {
+                            vec2 g = vFurUv * vec2(uDensity * 2.0, uDensity);
+                            vec2 cell = floor(g);
+                            float strand = furHash(cell);
+                            // 每根毛越往外越細
+                            float r = length(fract(g) - 0.5);
+                            if (strand < vFurLayer * 0.85 || r > 0.55 * (1.0 - vFurLayer * 0.8)) discard;
+                        }`)
+                    .replace('#include <map_fragment>', `#include <map_fragment>
+                        // 毛根處較暗，模擬毛與毛之間的陰影
+                        diffuseColor.rgb *= mix(0.55, 1.08, vFurLayer);`);
+            };
+            return mat;
+        }
+
+        function furMesh(geometry, map, opts) {
+            const mesh = new THREE.InstancedMesh(geometry, furMaterial(map, opts), FUR_LAYERS);
+            const id = new THREE.Matrix4();
+            for (let i = 0; i < FUR_LAYERS; i++) mesh.setMatrixAt(i, id);
+            mesh.frustumCulled = false;
+            mesh.castShadow = true;
+            return mesh;
+        }
+
+        // 把縮放直接烘進幾何體，讓毛長在各部位一致
+        const ellipsoid = (sx, sy, sz, seg = 48) => new THREE.SphereGeometry(1, seg, Math.round(seg * 0.75)).scale(sx, sy, sz);
+        const capsule = (r, len) => new THREE.CapsuleGeometry(r, len, 8, 20).translate(0, len / 2 + r, 0);
+
+        // ===== 場景 =====
+        const stage = document.getElementById('stage');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+        stage.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.05, 50);
+        camera.position.set(1.1, 0.75, 2.1);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.42, 0);
+        controls.enableDamping = true;
+        controls.minDistance = 0.9;
+        controls.maxDistance = 4.5;
+        controls.maxPolarAngle = Math.PI * 0.52;
+        controls.autoRotateSpeed = 1.2;
+
+        scene.add(new THREE.HemisphereLight(0xfff3e0, 0x5a4a3a, 1.2));
+        const sun = new THREE.DirectionalLight(0xffe8cc, 2.4);
+        sun.position.set(1.5, 2.5, 1.8);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.left = -1; sun.shadow.camera.right = 1;
+        sun.shadow.camera.top = 1; sun.shadow.camera.bottom = -1;
+        sun.shadow.radius = 6;
+        scene.add(sun);
+        const rim = new THREE.DirectionalLight(0xc8d8ff, 1.0);
+        rim.position.set(-1.5, 1.2, -1.8);
+        scene.add(rim);
+
+        // 坐墊（照片裡的深藍色毯子）
+        const cushion = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.75, 0.8, 0.06, 64),
+            new THREE.MeshStandardMaterial({ color: 0x34405e, roughness: 1 })
+        );
+        cushion.position.y = -0.03;
+        cushion.receiveShadow = true;
+        scene.add(cushion);
+
+        // ===== 貓 =====
+        const cat = new THREE.Group();
+        cat.rotation.y = -0.25;
+        scene.add(cat);
+
+        // 軀幹（呼吸時縮放這個群組）
+        const torso = new THREE.Group();
+        cat.add(torso);
+        const body = furMesh(ellipsoid(0.21, 0.3, 0.22), bodyTex);
+        body.position.set(0, 0.3, -0.04);
+        body.rotation.x = -0.28;
+        torso.add(body);
+        const chest = furMesh(ellipsoid(0.16, 0.2, 0.13), chestTex, { length: 0.014 });
+        chest.position.set(0, 0.42, 0.1);
+        chest.rotation.x = -0.15;
+        torso.add(chest);
+
+        // 後腿大腿（坐姿時鼓在兩側）
+        for (const s of [-1, 1]) {
+            const haunch = furMesh(ellipsoid(0.12, 0.15, 0.2), bodyTex);
+            haunch.position.set(s * 0.15, 0.14, -0.02);
+            haunch.rotation.set(0.2, s * 0.15, 0);
+            cat.add(haunch);
+            const foot = furMesh(ellipsoid(0.055, 0.04, 0.12, 24), legTex, { length: 0.008 });
+            foot.position.set(s * 0.17, 0.035, 0.13);
+            cat.add(foot);
+        }
+
+        // 前腳
+        for (const s of [-1, 1]) {
+            const leg = furMesh(capsule(0.045, 0.3), legTex, { length: 0.008, density: 160 });
+            leg.position.set(s * 0.075, 0.03, 0.15);
+            leg.rotation.x = 0.06;
+            cat.add(leg);
+            const paw = furMesh(ellipsoid(0.05, 0.035, 0.065, 24), lightTex, { length: 0.007 });
+            paw.position.set(s * 0.075, 0.03, 0.19);
+            cat.add(paw);
+        }
+
+        // 頭
+        const headPivot = new THREE.Group();
+        headPivot.position.set(0, 0.6, 0.06);
+        cat.add(headPivot);
+        const head = new THREE.Group();
+        head.position.set(0, 0.12, 0.04);
+        headPivot.add(head);
+
+        const skull = furMesh(ellipsoid(0.14, 0.125, 0.13), headTex, { length: 0.008, density: 200 });
+        head.add(skull);
+        for (const s of [-1, 1]) {
+            const cheek = furMesh(ellipsoid(0.07, 0.06, 0.06, 32), headTex, { length: 0.009 });
+            cheek.position.set(s * 0.07, -0.045, 0.06);
+            head.add(cheek);
+            const muzzle = furMesh(ellipsoid(0.032, 0.026, 0.03, 24), whiteTex, { length: 0.004 });
+            muzzle.position.set(s * 0.027, -0.058, 0.115);
+            head.add(muzzle);
+        }
+        const chin = furMesh(ellipsoid(0.04, 0.025, 0.04, 24), whiteTex, { length: 0.005 });
+        chin.position.set(0, -0.09, 0.09);
+        head.add(chin);
+
+        // 鼻子：磚粉色、深色描邊
+        const nose = new THREE.Mesh(
+            new THREE.SphereGeometry(0.022, 24, 16).scale(1.1, 0.7, 0.8),
+            new THREE.MeshStandardMaterial({ color: COLORS.nose, roughness: 0.45 })
+        );
+        nose.position.set(0, -0.028, 0.135);
+        head.add(nose);
+
+        // 耳朵（可抖動）
+        const ears = [];
+        for (const s of [-1, 1]) {
+            const pivot = new THREE.Group();
+            pivot.position.set(s * 0.075, 0.085, -0.01);
+            pivot.rotation.set(-0.1, s * -0.3, s * -0.32);
+            head.add(pivot);
+            const outer = furMesh(new THREE.ConeGeometry(0.06, 0.12, 24, 1, true).translate(0, 0.06, 0).scale(1, 1, 0.45), bodyTex, { length: 0.005 });
+            pivot.add(outer);
+            const inner = new THREE.Mesh(
+                new THREE.ConeGeometry(0.045, 0.095, 24, 1, true, Math.PI * 0.25, Math.PI * 0.5)
+                    .translate(0, 0.05, 0).scale(1, 1, 0.4),
+                new THREE.MeshStandardMaterial({ color: COLORS.earInner, roughness: 0.8, side: THREE.DoubleSide })
+            );
+            inner.position.z = 0.006;
+            pivot.add(inner);
+            ears.push({ pivot, side: s, rest: pivot.rotation.clone(), twitch: 0 });
+        }
+
+        // 眼睛：虹膜貼圖＋垂直瞳孔＋亮面角膜＋可眨的眼皮
+        const irisTex = canvasTexture(256, 256, (g, w, h) => {
+            const r = g.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, w / 2);
+            r.addColorStop(0, '#d8d070'); r.addColorStop(0.55, '#a8a845'); r.addColorStop(0.9, '#6b6a2c'); r.addColorStop(1, '#2a2a14');
+            g.fillStyle = r; g.fillRect(0, 0, w, h);
+            g.strokeStyle = 'rgba(60,55,20,0.25)';
+            for (let a = 0; a < Math.PI * 2; a += 0.08) {
+                g.beginPath(); g.moveTo(w / 2, h / 2);
+                g.lineTo(w / 2 + Math.cos(a) * w / 2, h / 2 + Math.sin(a) * h / 2); g.stroke();
+            }
+            g.fillStyle = '#0b0a08';
+            g.beginPath(); g.ellipse(w / 2, h / 2, w * 0.1, h * 0.36, 0, 0, Math.PI * 2); g.fill();
+        });
+        const eyelids = [];
+        const lidMat = new THREE.MeshStandardMaterial({ color: COLORS.base, roughness: 0.9 });
+        for (const s of [-1, 1]) {
+            const eye = new THREE.Group();
+            eye.position.set(s * 0.056, 0.008, 0.106);
+            eye.rotation.set(0, s * 0.35, s * 0.12);
+            head.add(eye);
+            const R = 0.032;
+            eye.add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.9, 24, 16), new THREE.MeshBasicMaterial({ color: 0x15130e })));
+            const iris = new THREE.Mesh(new THREE.CircleGeometry(R * 0.72, 32), new THREE.MeshStandardMaterial({ map: irisTex, roughness: 0.4 }));
+            iris.position.z = R * 0.9;
+            iris.scale.y = 0.82; // 杏仁眼
+            eye.add(iris);
+            const cornea = new THREE.Mesh(
+                new THREE.SphereGeometry(R, 32, 24),
+                new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, roughness: 0.02, clearcoat: 1, clearcoatRoughness: 0.02, specularIntensity: 1 })
+            );
+            eye.add(cornea);
+            // 上眼皮：上半球，繞 x 軸往前轉就蓋住眼睛
+            const lid = new THREE.Mesh(new THREE.SphereGeometry(R * 1.2, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lidMat);
+            eye.add(lid);
+            // 下眼皮固定，讓眼形更像貓
+            const low = new THREE.Mesh(new THREE.SphereGeometry(R * 1.18, 24, 12, 0, Math.PI * 2, Math.PI * 0.72, Math.PI * 0.28), lidMat);
+            low.rotation.x = -0.5;
+            eye.add(low);
+            eyelids.push(lid);
+        }
+
+        // 鬍鬚
+        const whiskerMat = new THREE.LineBasicMaterial({ color: 0xf6f1e8, transparent: true, opacity: 0.85 });
+        for (const s of [-1, 1]) {
+            for (let i = 0; i < 6; i++) {
+                const pts = [];
+                const y0 = -0.05 - (i % 3) * 0.008, z0 = 0.12;
+                const spread = (i - 2.5) * 0.04;
+                for (let k = 0; k <= 8; k++) {
+                    const t = k / 8;
+                    pts.push(new THREE.Vector3(s * (0.04 + t * 0.13), y0 + spread * 0.6 * t - 0.025 * t * t, z0 - t * 0.02));
+                }
+                head.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), whiskerMat));
+            }
+        }
+
+        // 尾巴：一串關節，末段黑色；擺動由根部往尖端傳遞
+        const tailJoints = [];
+        const SEG = 12, SEG_LEN = 0.045;
+        let parent = new THREE.Group();
+        parent.position.set(0.04, 0.05, -0.24);
+        parent.rotation.set(-1.45, 0, 0.25);
+        cat.add(parent);
+        for (let i = 0; i < SEG; i++) {
+            const joint = new THREE.Group();
+            if (i > 0) joint.position.y = SEG_LEN;
+            parent.add(joint);
+            const r = 0.033 - i * 0.0012;
+            const isTip = i >= SEG - 3;
+            const seg = furMesh(capsule(r, SEG_LEN - r), isTip ? tailTipTex : tailTex, { length: isTip ? 0.016 : 0.012, density: 120 });
+            seg.position.y = -r * 0.6;
+            joint.add(seg);
+            tailJoints.push(joint);
+            parent = joint;
+        }
+
+        document.getElementById('loading').remove();
+
+        // ===== 動畫 =====
+        const state = { sleepy: false, petting: 0, nextBlink: 2, blinkT: -1, lookX: 0, lookY: 0 };
+        const pointer = new THREE.Vector2();
+        window.addEventListener('pointermove', (e) => {
+            pointer.set(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+        });
+
+        const raycaster = new THREE.Raycaster();
+        let downAt = null;
+        renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+        renderer.domElement.addEventListener('pointerup', (e) => {
+            // 拖曳旋轉不算點擊
+            if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+            const p = new THREE.Vector2(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+            raycaster.setFromCamera(p, camera);
+            if (raycaster.intersectObject(cat, true).length) pet();
+        });
+
+        function pet() { state.petting = 2.2; }
+        document.getElementById('btn-pet').addEventListener('click', pet);
+        const toggle = (id, fn) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('click', () => {
+                const on = btn.getAttribute('aria-pressed') !== 'true';
+                btn.setAttribute('aria-pressed', String(on));
+                fn(on);
+            });
+        };
+        toggle('btn-sleepy', (on) => { state.sleepy = on; });
+        toggle('btn-spin', (on) => { controls.autoRotate = on; });
+
+        const clock = new THREE.Clock();
+        const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
+        let lidOpen = -0.35;
+
+        function animate() {
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const t = clock.elapsedTime;
+            state.petting = Math.max(0, state.petting - dt);
+            const petted = state.petting > 0;
+
+            // 呼吸：睡覺時慢而深
+            const breathRate = state.sleepy ? 1.3 : 2.2;
+            const breath = Math.sin(t * breathRate) * (state.sleepy ? 0.022 : 0.014);
+            torso.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath);
+
+            // 頭：跟著游標看；睡覺時低頭；被摸時往上蹭
+            const tx = petted ? 0 : pointer.x * 0.5;
+            const ty = petted ? 0.2 : (state.sleepy ? -0.35 : pointer.y * 0.25);
+            state.lookX = damp(state.lookX, tx, 3, dt);
+            state.lookY = damp(state.lookY, ty, 3, dt);
+            headPivot.rotation.y = state.lookX;
+            headPivot.rotation.x = -state.lookY + Math.sin(t * 0.7) * 0.02;
+            headPivot.rotation.z = petted ? Math.sin(t * 6) * 0.08 : damp(headPivot.rotation.z, 0, 4, dt);
+
+            // 眼皮：平常就是照片裡那種半瞇；被摸或想睡就閉上
+            // 眼皮繞 x 軸：負值往上掀開、正值往下蓋住
+            let lidTarget = state.sleepy ? 0.55 : (petted ? 0.6 : -0.35);
+            state.nextBlink -= dt;
+            if (state.nextBlink <= 0 && !state.sleepy) { state.blinkT = 0; state.nextBlink = 2.5 + Math.random() * 4; }
+            if (state.blinkT >= 0) {
+                state.blinkT += dt;
+                lidTarget = 0.65;
+                if (state.blinkT > 0.12) state.blinkT = -1;
+            }
+            lidOpen = damp(lidOpen, lidTarget, state.blinkT >= 0 ? 40 : 10, dt);
+            eyelids.forEach((l) => { l.rotation.x = lidOpen; });
+
+            // 耳朵：隨機抖一下；被摸時往後壓
+            ears.forEach((ear) => {
+                if (Math.random() < dt * 0.25) ear.twitch = 0.35;
+                ear.twitch = Math.max(0, ear.twitch - dt);
+                const flick = ear.twitch > 0 ? Math.sin(ear.twitch * 40) * 0.25 : 0;
+                const flat = petted ? 0.45 : 0;
+                ear.pivot.rotation.z = damp(ear.pivot.rotation.z, ear.rest.z + ear.side * (-flat) + flick, 12, dt);
+                ear.pivot.rotation.x = damp(ear.pivot.rotation.x, ear.rest.x - flat * 0.6, 12, dt);
+            });
+
+            // 尾巴：波從根部往尖端傳，尖端（黑色那段）擺最多
+            const tailSpeed = state.sleepy ? 0.8 : 1.8;
+            const tailAmp = petted ? 0.28 : (state.sleepy ? 0.06 : 0.14);
+            tailJoints.forEach((j, i) => {
+                const k = i / SEG;
+                j.rotation.z = Math.sin(t * tailSpeed - i * 0.45) * tailAmp * (0.3 + k);
+                j.rotation.x = i === 0 ? 0 : 0.12 + k * 0.08; // 沿地面彎向前方
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
