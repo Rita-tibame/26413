@@ -106,9 +106,9 @@
 
         // ===== 毛色（取自真貓照片：棕色鯖魚紋虎斑、白下巴、黑尾尖）=====
         const COLORS = {
-            base: '#85715a',     // 帶麻點的棕褐底色
-            light: '#b9a07e',    // 肚子、腿內側
-            stripe: '#2b2219',   // 深色條紋
+            base: '#7a6853',     // 帶麻點的棕褐底色
+            light: '#a8916f',    // 肚子、腿內側
+            stripe: '#221a12',   // 深色條紋
             dorsal: '#3a2e22',   // 背脊
             white: '#ddd2c2',    // 下巴、口鼻
             nose: '#c98576',
@@ -243,12 +243,16 @@
             return canvasTexture(256, 512, (g, w, h) => {
                 g.fillStyle = tipBlack ? COLORS.stripe : COLORS.base; g.fillRect(0, 0, w, h);
                 if (!tipBlack) {
+                    // Lathe 幾何的 u=0 朝正面（+z），所以淺色內側放在 u=0.5（背面）
                     const inner = g.createLinearGradient(0, 0, w, 0);
-                    inner.addColorStop(0.1, 'rgba(201,173,133,0.7)'); inner.addColorStop(0.35, 'rgba(201,173,133,0)');
+                    inner.addColorStop(0.3, 'rgba(168,145,111,0)'); inner.addColorStop(0.5, 'rgba(168,145,111,0.8)');
+                    inner.addColorStop(0.7, 'rgba(168,145,111,0)');
                     g.fillStyle = inner; g.fillRect(0, 0, w, h);
                     for (let i = 0; i < rings; i++) {
                         const y = (i + 0.5) / rings * h;
-                        wavyBand(g, w, y, h / rings * 0.38, { amp: 3, freq: 1, from: w * 0.2, to: w, alpha: 0.88 });
+                        // 繞腿一整圈，背面那段較淡
+                        wavyBand(g, w, y, h / rings * 0.34, { amp: 3, freq: 1, from: 0, to: w * 0.42, alpha: 0.9 });
+                        wavyBand(g, w, y + 3, h / rings * 0.3, { amp: 3, freq: 1, from: w * 0.58, to: w, alpha: 0.9 });
                     }
                 }
                 ticking(g, w, h, 1500);
@@ -317,7 +321,14 @@
 
         // 把縮放直接烘進幾何體，讓毛長在各部位一致
         const ellipsoid = (sx, sy, sz, seg = 48) => new THREE.SphereGeometry(1, seg, Math.round(seg * 0.75)).scale(sx, sy, sz);
-        const capsule = (r, len) => new THREE.CapsuleGeometry(r, len, 8, 20).translate(0, len / 2 + r, 0);
+        // CapsuleGeometry 的 v 是依頂點列平均分配，兩端半球會吃掉大半貼圖；
+        // 改成依高度重新計算 v，環紋才會均勻分布在整條腿／尾巴上
+        const capsule = (r, len) => {
+            const geo = new THREE.CapsuleGeometry(r, len, 8, 20).translate(0, len / 2 + r, 0);
+            const pos = geo.attributes.position, uv = geo.attributes.uv, total = len + 2 * r;
+            for (let i = 0; i < pos.count; i++) uv.setY(i, pos.getY(i) / total);
+            return geo;
+        };
 
         // ===== 場景 =====
         const stage = document.getElementById('stage');
@@ -332,7 +343,12 @@
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.05, 50);
-        camera.position.set(1.1, 0.75, 2.1);
+        // 直式手機畫面較窄，鏡頭拉遠讓整隻貓入鏡
+        const fitCamera = () => {
+            const dist = window.innerWidth / window.innerHeight < 0.8 ? 1.45 : 1;
+            camera.position.set(1.1 * dist, 0.75 + 0.1 * (dist - 1), 2.1 * dist);
+        };
+        fitCamera();
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0.42, 0);
@@ -626,6 +642,7 @@
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            fitCamera();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
